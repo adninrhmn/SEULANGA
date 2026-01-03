@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   MOCK_BUSINESSES, MOCK_BOOKINGS, MOCK_UNITS, MOCK_TRANSACTIONS, 
@@ -12,16 +11,16 @@ import {
 } from '../types';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer
+  ResponsiveContainer, BarChart, Bar
 } from 'recharts';
 
 const revenueData = [
-  { name: 'Jul', revenue: 45000000, occupancy: 78 },
-  { name: 'Aug', revenue: 52000000, occupancy: 82 },
-  { name: 'Sep', revenue: 48000000, occupancy: 75 },
-  { name: 'Oct', revenue: 61000000, occupancy: 88 },
-  { name: 'Nov', revenue: 55000000, occupancy: 80 },
-  { name: 'Dec', revenue: 78000000, occupancy: 95 },
+  { name: 'Jul', revenue: 45000000, occupancy: 78, bookings: 42 },
+  { name: 'Aug', revenue: 52000000, occupancy: 82, bookings: 48 },
+  { name: 'Sep', revenue: 48000000, occupancy: 75, bookings: 39 },
+  { name: 'Oct', revenue: 61000000, occupancy: 88, bookings: 55 },
+  { name: 'Nov', revenue: 55000000, occupancy: 80, bookings: 50 },
+  { name: 'Dec', revenue: 78000000, occupancy: 95, bookings: 72 },
 ];
 
 type ModuleType = 'overview' | 'inventory' | 'bookings' | 'finance' | 'team' | 'profile' | 'marketing' | 'reviews' | 'audit' | 'subscription';
@@ -36,7 +35,6 @@ interface OwnerDashboardProps {
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ businessId, moduleConfigs, currentUser, onUpdateUser }) => {
   const [activeModule, setActiveModule] = useState<ModuleType>('overview');
   const [insights, setInsights] = useState<string>('Analyzing market data for your properties...');
-  const [activeChart, setActiveChart] = useState<'revenue' | 'occupancy'>('revenue');
   
   const [business, setBusiness] = useState<Business>(MOCK_BUSINESSES.find(b => b.id === businessId) || MOCK_BUSINESSES[0]);
   const [units] = useState<Unit[]>(MOCK_UNITS.filter(u => u.businessId === business.id));
@@ -89,83 +87,152 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ businessId, modu
     return items.filter(item => !item.module || activeModules.includes(item.module));
   }, [business.category, moduleConfigs]);
 
-  const renderOverview = () => (
-    <div className="space-y-10 animate-fade-up">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Revenue (MTD)', value: `Rp ${(revenueData[5].revenue / 1000000).toFixed(1)}M`, trend: '+15.2%', icon: 'fa-sack-dollar', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Active Bookings', value: bookings.filter(b => b.status === BookingStatus.CONFIRMED).length, trend: '+4 today', icon: 'fa-calendar-check', color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'Occupancy Rate', value: `${revenueData[5].occupancy}%`, trend: '+3.8%', icon: 'fa-door-open', color: 'text-violet-600', bg: 'bg-violet-50' },
-          { label: 'Pending Payouts', value: 'Rp 12.4M', trend: 'Processing', icon: 'fa-vault', color: 'text-amber-600', bg: 'bg-amber-50' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-8 rounded-[36px] border border-slate-50 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${stat.bg} ${stat.color}`}>
-              <i className={`fas ${stat.icon} text-2xl`}></i>
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
-              <div className="flex items-end justify-between">
-                <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</h3>
-                <span className="text-[10px] font-black text-slate-300">{stat.trend}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+  const renderOverview = () => {
+    const bookingsToday = bookings.filter(b => b.createdAt === new Date().toISOString().split('T')[0]).length;
+    const bookingsMonth = revenueData[5].bookings;
+    const unitLimit = business.subscription === SubscriptionPlan.PREMIUM ? 'Unlimited' : business.subscription === SubscriptionPlan.PRO ? '50' : '10';
 
-      <div className="grid lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 space-y-10">
-          <div className="bg-white p-10 rounded-[48px] border border-slate-50 shadow-sm">
-            <div className="flex items-center justify-between mb-12">
-              <div>
-                <h3 className="font-black text-2xl text-slate-900 tracking-tight">Growth Telemetry</h3>
-                <p className="text-slate-400 text-sm font-medium">Platform-synced performance metrics</p>
-              </div>
+    return (
+      <div className="space-y-10 animate-fade-up">
+        {/* Top Performance Summary Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white p-8 rounded-[36px] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
+             <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                   <i className="fas fa-sack-dollar text-xl"></i>
+                </div>
+                <span className="text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg">+12.5%</span>
+             </div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pendapatan (Bulan Ini)</p>
+             <h3 className="text-2xl font-black text-slate-900 tracking-tight">Rp {(revenueData[5].revenue / 1000000).toFixed(1)}M</h3>
+          </div>
+
+          <div className="bg-white p-8 rounded-[36px] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
+             <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                   <i className="fas fa-calendar-check text-xl"></i>
+                </div>
+                <div className="text-right">
+                   <p className="text-[10px] font-black text-indigo-600 uppercase">{bookingsToday} Today</p>
+                </div>
+             </div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ringkasan Booking</p>
+             <h3 className="text-2xl font-black text-slate-900 tracking-tight">{bookingsMonth} <span className="text-sm text-slate-400 font-bold">Reservasi</span></h3>
+          </div>
+
+          <div className="bg-white p-8 rounded-[36px] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
+             <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
+                   <i className="fas fa-door-open text-xl"></i>
+                </div>
+                <span className="text-[10px] font-black text-violet-500 bg-violet-50 px-2 py-1 rounded-lg">High Demand</span>
+             </div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tingkat Okupansi</p>
+             <h3 className="text-2xl font-black text-slate-900 tracking-tight">{revenueData[5].occupancy}% <span className="text-sm text-slate-400 font-bold">Terisi</span></h3>
+          </div>
+
+          <div className="bg-slate-950 p-8 rounded-[36px] shadow-xl text-white relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+             <div className="relative z-10">
+                <div className="flex justify-between items-center mb-6">
+                   <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${business.status === 'active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
+                      {business.status === 'active' ? 'Operational' : 'Suspended'}
+                   </span>
+                   <i className="fas fa-shield-check text-indigo-400"></i>
+                </div>
+                <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">{business.subscription} Plan</p>
+                <h3 className="text-xl font-black mb-4">Quota: {units.length} / {unitLimit} Units</h3>
+                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                   <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${(units.length / (parseInt(unitLimit) || 100)) * 100}%` }}></div>
+                </div>
+             </div>
+          </div>
+        </div>
+
+        {/* Chart & Insights Row */}
+        <div className="grid lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+            <div className="flex items-center justify-between">
+               <div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Tren Reservasi & Revenue</h3>
+                  <p className="text-slate-400 text-sm font-medium">Visualisasi performa operasional 6 bulan terakhir</p>
+               </div>
+               <div className="flex bg-slate-50 p-1 rounded-xl">
+                  <button className="px-4 py-2 bg-white shadow-sm rounded-lg text-[10px] font-black uppercase text-indigo-600">Monthly</button>
+                  <button className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600">Weekly</button>
+               </div>
             </div>
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueData}>
                   <defs>
-                    <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
+                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
                       <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="6 6" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 800}} dy={15} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 800}} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 800}} />
-                  <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '20px'}} />
-                  <Area type="monotone" dataKey={activeChart} stroke="#4f46e5" strokeWidth={5} fillOpacity={1} fill="url(#chartFill)" />
+                  <Tooltip 
+                     contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '20px'}}
+                     itemStyle={{fontWeight: 800, fontSize: '12px'}}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
+                  <Area type="monotone" dataKey="occupancy" stroke="#10b981" strokeWidth={4} fill="transparent" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-8">
-          <div className="ai-gradient text-white p-10 rounded-[48px] shadow-2xl relative overflow-hidden flex flex-col min-h-[400px]">
-            <div className="relative z-10 flex flex-col h-full">
-              <div className="flex items-center gap-5 mb-8">
-                <div className="w-14 h-14 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/30 shadow-inner">
-                  <i className="fas fa-wand-magic-sparkles text-white text-xl"></i>
+          <div className="space-y-8">
+             {/* Critical Notifications Section */}
+             <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                   <h4 className="font-black text-slate-900 uppercase text-xs tracking-widest">Peringatan Sistem</h4>
+                   <span className="w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
                 </div>
-                <div>
-                  <h3 className="font-black text-2xl tracking-tighter">Gemini Strategy</h3>
-                  <p className="text-indigo-200/80 text-[10px] font-bold uppercase tracking-widest">Business Advisor</p>
+                <div className="space-y-4">
+                   {[
+                      { title: 'Pembayaran Tertunda', desc: '3 reservasi menunggu verifikasi manual.', type: 'payment', icon: 'fa-clock' },
+                      { title: 'Limit Hampir Tercapai', desc: 'Anda telah menggunakan 90% kuota unit.', type: 'system', icon: 'fa-triangle-exclamation' }
+                   ].map((notif, idx) => (
+                      <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex gap-4 hover:border-indigo-200 transition-colors cursor-pointer">
+                         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-slate-400 shrink-0">
+                            <i className={`fas ${notif.icon} text-xs`}></i>
+                         </div>
+                         <div>
+                            <p className="text-[10px] font-black text-slate-900 uppercase">{notif.title}</p>
+                            <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">{notif.desc}</p>
+                         </div>
+                      </div>
+                   ))}
                 </div>
-              </div>
-              <div className="flex-1 overflow-y-auto scrollbar-hide mb-6 text-sm leading-relaxed text-indigo-50 font-medium italic">
-                "{insights}"
-              </div>
-              <button onClick={fetchInsights} className="w-full py-4 bg-white text-indigo-600 rounded-2xl font-black text-sm shadow-xl hover:scale-[1.02] transition-transform">
-                Regenerate Guidance
-              </button>
-            </div>
+             </div>
+
+             {/* Gemini AI Insights */}
+             <div className="bg-indigo-600 p-8 rounded-[40px] shadow-xl text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+                <div className="relative z-10">
+                   <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                         <i className="fas fa-wand-magic-sparkles"></i>
+                      </div>
+                      <h4 className="font-black text-sm uppercase tracking-tighter">AI Strategist</h4>
+                   </div>
+                   <p className="text-xs leading-relaxed font-medium italic opacity-90 mb-8">
+                      "{insights}"
+                   </p>
+                   <button onClick={fetchInsights} className="w-full py-3 bg-white text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-50 transition-all">
+                      Sync AI Logic
+                   </button>
+                </div>
+             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderProfile = () => (
     <div className="max-w-5xl mx-auto space-y-10 animate-fade-up">
@@ -280,6 +347,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ businessId, modu
          <header className="h-24 bg-white/70 backdrop-blur-md border-b border-slate-200/50 flex items-center justify-between px-10 sticky top-0 z-40">
             <div>
                <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">{activeModule} Matrix</h1>
+            </div>
+            <div className="flex items-center gap-6">
+                <div className="flex flex-col items-end">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Network Status</p>
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-black text-slate-900 uppercase">Operational</span>
+                    </div>
+                </div>
             </div>
          </header>
 
