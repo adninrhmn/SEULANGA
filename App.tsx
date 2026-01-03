@@ -36,6 +36,11 @@ const App: React.FC = () => {
     localStorage.setItem('seulanga_lang', lang);
   };
 
+  const handleUpdateUser = (updatedData: Partial<User>) => {
+    if (!currentUser) return;
+    setCurrentUser({ ...currentUser, ...updatedData });
+  };
+
   const handleLogin = (role: UserRole, email?: string) => {
     const user = MOCK_USERS.find(u => u.role === role) || {
       id: `u-gen-${Date.now()}`,
@@ -48,7 +53,6 @@ const App: React.FC = () => {
 
     setCurrentUser(user as User);
     
-    // Redirect logic after login
     if (selectedProperty) {
       setCurrentView('property-detail');
     } else if (role === UserRole.BUSINESS_OWNER) {
@@ -78,21 +82,15 @@ const App: React.FC = () => {
     } else if (view === 'super-admin' && !subView) {
       setAdminSubView('overview');
     }
+    // Handle link from Layout profile settings
+    if (view === 'guest-dash' && subView === 'profile') {
+        // Just let it fall through to renderView
+    }
   };
 
   const navigateToProperty = (property: Business) => {
     setSelectedProperty(property);
-    // Kita izinkan melihat detail, tapi pemesanan nanti dicek di PropertyDetail
     setCurrentView('property-detail');
-  };
-
-  const handleBookingAttempt = (property: Business) => {
-    if (!currentUser) {
-      setSelectedProperty(property);
-      setCurrentView('login');
-      return;
-    }
-    navigateToProperty(property);
   };
 
   if (isLoading) {
@@ -117,12 +115,7 @@ const App: React.FC = () => {
       case 'landing':
         return <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
       case 'owner-dash':
-        return currentUser?.businessId ? (
-          <OwnerDashboard 
-            businessId={currentUser.businessId} 
-            moduleConfigs={moduleConfigs} 
-          />
-        ) : <OwnerDashboard businessId="b1" moduleConfigs={moduleConfigs} />;
+        return <OwnerDashboard businessId={currentUser?.businessId || "b1"} moduleConfigs={moduleConfigs} currentUser={currentUser} onUpdateUser={handleUpdateUser} />;
       case 'super-admin':
         return (
           <SuperAdminDashboard 
@@ -131,12 +124,14 @@ const App: React.FC = () => {
             language={language}
             moduleConfigs={moduleConfigs}
             onUpdateModuleConfigs={setModuleConfigs}
+            currentUser={currentUser}
+            onUpdateUser={handleUpdateUser}
           />
         );
       case 'staff-dash':
-        return <StaffDashboard />;
+        return <StaffDashboard currentUser={currentUser} onUpdateUser={handleUpdateUser} />;
       case 'guest-dash':
-        return <GuestDashboard />;
+        return <GuestDashboard currentUser={currentUser} onUpdateUser={handleUpdateUser} initialTab={adminSubView === 'profile' ? 'profile' : 'overview'} />;
       case 'property-detail':
         return selectedProperty ? (
           <PropertyDetail 

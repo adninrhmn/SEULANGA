@@ -1,18 +1,20 @@
 
 import React, { useState, useMemo } from 'react';
-// Removed MOCK_ADS from the imports as it does not exist in constants.tsx
-import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS, TRANSLATIONS } from '../constants';
-import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule } from '../types';
-import { generateWelcomeEmail } from '../services/geminiService';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS, TRANSLATIONS, MOCK_BOOKINGS, DEFAULT_CATEGORY_MODULE_MAP } from '../constants';
+import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule, BookingStatus } from '../types';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, AreaChart, Area, ComposedChart, Line, Legend 
+} from 'recharts';
 
-const revenueData = [
-  { name: 'Jul', subs: 45000000, comm: 12000000, mrr: 62000000 },
-  { name: 'Aug', subs: 52000000, comm: 18000000, mrr: 78000000 },
-  { name: 'Sep', subs: 48000000, comm: 15000000, mrr: 70000000 },
-  { name: 'Oct', subs: 61000000, comm: 22000000, mrr: 95000000 },
-  { name: 'Nov', subs: 68000000, comm: 25000000, mrr: 108000000 },
-  { name: 'Dec', subs: 85000000, comm: 32000000, mrr: 137000000 },
+// Enhanced mock data for trends
+const platformTrendData = [
+  { name: 'Jul', revenue: 450, commission: 67, bookings: 120 },
+  { name: 'Aug', revenue: 520, commission: 78, bookings: 155 },
+  { name: 'Sep', revenue: 480, commission: 72, bookings: 142 },
+  { name: 'Oct', revenue: 610, commission: 91, bookings: 198 },
+  { name: 'Nov', revenue: 680, commission: 102, bookings: 215 },
+  { name: 'Dec', revenue: 850, commission: 127, bookings: 290 },
 ];
 
 interface SubPlan {
@@ -31,303 +33,505 @@ const INITIAL_PLANS: SubPlan[] = [
 ];
 
 interface SuperAdminDashboardProps {
-  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings';
+  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings' | 'profile' | 'engine';
   onNavigate: (view: string, subView?: string) => void;
   language: 'id' | 'en';
-  // Added moduleConfigs and onUpdateModuleConfigs to props
   moduleConfigs: CategoryModuleConfig;
   onUpdateModuleConfigs: (configs: CategoryModuleConfig) => void;
+  currentUser: User | null;
+  onUpdateUser: (data: Partial<User>) => void;
 }
 
-// Updated component signature to destructure new props
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ 
   activeTab, 
   onNavigate, 
   language,
   moduleConfigs,
-  onUpdateModuleConfigs
+  onUpdateModuleConfigs,
+  currentUser,
+  onUpdateUser
 }) => {
   const [businesses, setBusinesses] = useState<Business[]>(MOCK_BUSINESSES);
-  const [plans, setPlans] = useState<SubPlan[]>(INITIAL_PLANS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
-  const [isBackupRunning, setIsBackupRunning] = useState(false);
-  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
-  const [payoutRequests, setPayoutRequests] = useState([
-    { id: 'po1', businessName: 'Grand Seulanga Hotel', amount: 12500000, status: 'pending', requestedAt: '2024-12-28', processing: false },
-    { id: 'po2', businessName: 'Pine Hill Guesthouse', amount: 4200000, status: 'pending', requestedAt: '2024-12-29', processing: false }
-  ]);
+  const [users] = useState<User[]>(MOCK_USERS);
+  const [plans] = useState<SubPlan[]>(INITIAL_PLANS);
+  const [auditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
   
+  // New States for Platform Flexibility
+  const [categories, setCategories] = useState<string[]>(Object.values(BusinessCategory));
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  
+  const [planModuleMapping, setPlanModuleMapping] = useState<Record<SubscriptionPlan, SystemModule[]>>({
+    [SubscriptionPlan.BASIC]: [SystemModule.BOOKING, SystemModule.REVIEWS],
+    [SubscriptionPlan.PRO]: [SystemModule.BOOKING, SystemModule.REVIEWS, SystemModule.PAYMENT, SystemModule.MARKETING],
+    [SubscriptionPlan.PREMIUM]: Object.values(SystemModule)
+  });
+
+  // Management States
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [isAddingBusiness, setIsAddingBusiness] = useState(false);
+  const [newBizData, setNewBizData] = useState({
+    name: '',
+    category: BusinessCategory.HOTEL,
+    address: '',
+    ownerEmail: '',
+    subscription: SubscriptionPlan.BASIC
+  });
+  
+  // Profile States
+  const [profileName, setProfileName] = useState(currentUser?.name || '');
+  const [isSaving, setIsSaving] = useState(false);
+
   const t = TRANSLATIONS[language];
 
-  const stats = [
-    { label: t.platform_gtv, value: 'Rp 4.82B', trend: '+18.4%', icon: 'fa-vault', color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: t.revenue_net, value: 'Rp 542M', trend: '+12.1%', icon: 'fa-piggy-bank', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: t.active_tenants, value: businesses.length, trend: '+4 new', icon: 'fa-building-shield', color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: t.security_health, value: '99.9%', trend: 'Optimal', icon: 'fa-shield-heart', color: 'text-rose-600', bg: 'bg-rose-50' },
-  ];
-
-  const renderStatusBadge = (status: BusinessStatus) => {
-    const configs: Record<string, { bg: string, text: string, border: string }> = {
-      active: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
-      pending: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-      suspended: { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
-      rejected: { bg: 'bg-slate-950', text: 'text-white', border: 'border-slate-800' },
-    };
-    const config = configs[status] || { bg: 'bg-slate-50', text: 'text-slate-500', border: 'border-slate-100' };
-    return (
-      <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${config.bg} ${config.text} ${config.border}`}>
-        {status.replace('_', ' ')}
-      </span>
-    );
+  // Logic Handlers
+  const handleToggleModule = (cat: string, module: SystemModule) => {
+    const currentModules = moduleConfigs[cat as BusinessCategory] || [];
+    const newModules = currentModules.includes(module)
+      ? currentModules.filter(m => m !== module)
+      : [...currentModules, module];
+    
+    onUpdateModuleConfigs({
+      ...moduleConfigs,
+      [cat]: newModules
+    });
   };
 
-  const handleProcessPayout = async (id: string) => {
-    const payout = payoutRequests.find(p => p.id === id);
-    if (!payout) return;
-    setPayoutRequests(prev => prev.map(p => p.id === id ? { ...p, processing: true } : p));
-    await new Promise(res => setTimeout(res, 2000));
-    setPayoutRequests(prev => prev.map(p => p.id === id ? { ...p, status: 'settled', processing: false } : p));
+  const handleTogglePlanModule = (plan: SubscriptionPlan, module: SystemModule) => {
+    const current = planModuleMapping[plan] || [];
+    const updated = current.includes(module)
+      ? current.filter(m => m !== module)
+      : [...current, module];
     
-    const newLog: AuditLog = {
-      id: `log${Date.now()}`,
-      actorId: 'u1',
-      actorName: 'Zian Ali',
-      actorRole: UserRole.SUPER_ADMIN,
-      action: 'Batch Payout Executed',
-      target: payout.businessName,
-      type: 'financial',
-      timestamp: new Date().toLocaleString()
+    setPlanModuleMapping({
+      ...planModuleMapping,
+      [plan]: updated
+    });
+  };
+
+  const handleAddCategory = () => {
+    if (newCategoryName && !categories.includes(newCategoryName)) {
+      setCategories([...categories, newCategoryName]);
+      onUpdateModuleConfigs({
+        ...moduleConfigs,
+        [newCategoryName as BusinessCategory]: []
+      });
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+    }
+  };
+
+  const handleRemoveCategory = (cat: string) => {
+    if (window.confirm(`Are you sure you want to terminate the ${cat} topology?`)) {
+      setCategories(categories.filter(c => c !== cat));
+    }
+  };
+
+  const handleUpdateBizStatus = (id: string, status: BusinessStatus) => {
+    setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+    if (selectedBusiness?.id === id) setSelectedBusiness({ ...selectedBusiness, status });
+  };
+
+  const handleCreateBusiness = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newBiz: Business = {
+      id: `b-${Date.now()}`,
+      name: newBizData.name,
+      category: newBizData.category,
+      ownerId: 'u-placeholder',
+      description: 'Manually added by Super Admin.',
+      address: newBizData.address,
+      status: 'active',
+      subscription: newBizData.subscription,
+      images: ['https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070'],
+      rating: 0,
+      location: { lat: 0, lng: 0 },
+      registrationDate: new Date().toISOString()
     };
-    setAuditLogs([newLog, ...auditLogs]);
+    setBusinesses([newBiz, ...businesses]);
+    setIsAddingBusiness(false);
+    setNewBizData({ name: '', category: BusinessCategory.HOTEL, address: '', ownerEmail: '', subscription: SubscriptionPlan.BASIC });
+    alert('Entity manual berhasil ditambahkan ke cluster.');
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    await new Promise(r => setTimeout(r, 1000));
+    onUpdateUser({ name: profileName });
+    setIsSaving(false);
+    alert('Governing Identity Updated.');
   };
 
   const renderOverview = () => (
     <div className="space-y-10 animate-fade-up">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform`}>
-              <i className={`fas ${stat.icon} text-2xl`}></i>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group">
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-8">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Topology</h4>
+              <i className="fas fa-building-circle-check text-indigo-200 text-xl group-hover:text-indigo-600 transition-colors"></i>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">{stat.label}</p>
-            <div className="flex items-end justify-between">
-              <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</h3>
-              <span className={`text-xs font-black ${stat.trend.includes('+') ? 'text-emerald-600' : 'text-slate-400'}`}>{stat.trend}</span>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-3xl font-black text-slate-900">{businesses.filter(b => b.status === 'active').length}</p>
+                <p className="text-[9px] font-bold text-emerald-500 uppercase mt-1">Active</p>
+              </div>
+              <div className="text-center border-x border-slate-50">
+                <p className="text-3xl font-black text-slate-900">{businesses.filter(b => b.status === 'pending').length}</p>
+                <p className="text-[9px] font-bold text-amber-500 uppercase mt-1">Pending</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-black text-slate-900">{businesses.filter(b => b.status === 'suspended').length}</p>
+                <p className="text-[9px] font-bold text-rose-500 uppercase mt-1">Suspended</p>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <h3 className="font-black text-2xl text-slate-900 tracking-tight">MRR Expansion Strategy</h3>
-              <p className="text-slate-400 font-medium">Subscription revenue vs. Commission stream trends.</p>
-            </div>
-          </div>
-          <div className="h-[450px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient id="colorSubs" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/><stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={15} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} tickFormatter={(val) => `Rp${val/1000000}M`} />
-                <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)', padding: '20px'}} />
-                <Area type="monotone" dataKey="mrr" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorSubs)" name="Total MRR" />
-              </AreaChart>
-            </ResponsiveContainer>
           </div>
         </div>
-        
-        <div className="space-y-8">
-          <div className="bg-slate-950 p-10 rounded-[48px] shadow-2xl text-white relative overflow-hidden h-full flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
-            <div className="relative z-10">
-              <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 mb-8">
-                 <i className="fas fa-microchip text-indigo-400 text-xl"></i>
+
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden group">
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-8">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">User Nodes</h4>
+              <i className="fas fa-users-viewfinder text-indigo-200 text-xl group-hover:text-indigo-600 transition-colors"></i>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-3xl font-black text-slate-900">{users.filter(u => u.role === UserRole.BUSINESS_OWNER).length}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Owners</p>
               </div>
-              <h3 className="text-3xl font-black tracking-tight mb-4 leading-tight">Infrastructure Health</h3>
-              <p className="text-indigo-200/60 font-medium mb-10">All platform modules operating at peak efficiency across clusters.</p>
-              
+              <div className="text-center border-x border-slate-50">
+                <p className="text-3xl font-black text-slate-900">{users.filter(u => u.role === UserRole.SUPER_ADMIN || u.role === UserRole.ADMIN_STAFF).length}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Admins</p>
+              </div>
+              <div className="text-center">
+                <p className="text-3xl font-black text-slate-900">{users.filter(u => u.role === UserRole.GUEST).length}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Guests</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-950 p-8 rounded-[40px] shadow-xl relative overflow-hidden text-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-6">
+              <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Net Revenue Hub</h4>
+              <span className="bg-indigo-600/20 text-indigo-400 text-[9px] px-2 py-0.5 rounded-md font-black">LIVE</span>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Total Platform Revenue</p>
+                <p className="text-2xl font-black">Rp 842.2M</p>
+              </div>
+              <div className="pt-4 border-t border-white/5">
+                <p className="text-[9px] font-black text-indigo-400 uppercase mb-1">SEULANGA Commission</p>
+                <p className="text-xl font-black text-emerald-400">Rp 126.3M</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+        <div className="xl:col-span-2 space-y-8">
+           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                 <div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Platform Telemetry</h3>
+                    <p className="text-slate-400 text-xs font-medium">Monthly correlation between Booking Volume & Revenue</p>
+                 </div>
+              </div>
+              <div className="h-[440px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={platformTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 800}} />
+                    <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '20px'}} />
+                    <Area type="monotone" dataKey="revenue" fill="#4f46e520" stroke="#4f46e5" strokeWidth={4} />
+                    <Bar dataKey="bookings" barSize={40} fill="#10b981" radius={[8, 8, 0, 0]} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+           </div>
+        </div>
+        <div className="space-y-8">
+           <div className="bg-slate-950 p-10 rounded-[48px] shadow-2xl text-white">
+              <h4 className="font-black text-xl tracking-tight uppercase mb-8">System Health</h4>
               <div className="space-y-6">
-                 {[
-                   { label: 'API Latency', value: '38ms', color: 'text-emerald-400' },
-                   { label: 'DB Connections', value: '422 Active', color: 'text-indigo-400' },
-                   { label: 'Cloud Backup', value: '4h ago (Auto)', color: 'text-amber-400' }
-                 ].map(i => (
-                   <div key={i.label} className="flex justify-between border-b border-white/5 pb-4">
-                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{i.label}</span>
-                      <span className={`text-xs font-black ${i.color}`}>{i.value}</span>
+                 {['Cloud Server Cluster', 'Task Queue Workers', 'Error Rate (Nominal)', 'DB Replication'].map(sys => (
+                   <div key={sys} className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-300">{sys}</span>
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                    </div>
                  ))}
               </div>
-            </div>
-            <button 
-              onClick={() => { setIsBackupRunning(true); setTimeout(() => setIsBackupRunning(false), 2000); }}
-              className="w-full py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-all mt-10"
-            >
-               {isBackupRunning ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-cloud-arrow-up mr-2"></i>}
-               Manual System Sync
-            </button>
-          </div>
+           </div>
         </div>
       </div>
+    </div>
+  );
+
+  const renderEngine = () => (
+    <div className="space-y-12 animate-fade-up">
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Topology Governance */}
+          <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Topology Engine</h3>
+                   <p className="text-slate-400 text-xs font-medium">Define and modularize business categories</p>
+                </div>
+                <button 
+                  onClick={() => setIsAddingCategory(true)}
+                  className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg hover:rotate-90 transition-all"
+                >
+                   <i className="fas fa-plus"></i>
+                </button>
+             </div>
+
+             <div className="space-y-4">
+                {categories.map(cat => (
+                  <div key={cat} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 space-y-6 group">
+                     <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm border border-slate-200">
+                              <i className="fas fa-layer-group"></i>
+                           </div>
+                           <span className="font-black text-slate-900 uppercase text-xs">{cat}</span>
+                        </div>
+                        <button onClick={() => handleRemoveCategory(cat)} className="text-slate-300 hover:text-rose-500 transition-colors">
+                           <i className="fas fa-trash-can text-sm"></i>
+                        </button>
+                     </div>
+                     <div className="flex flex-wrap gap-2">
+                        {Object.values(SystemModule).map(mod => (
+                          <button 
+                            key={mod}
+                            onClick={() => handleToggleModule(cat, mod)}
+                            className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all ${
+                              (moduleConfigs[cat as BusinessCategory] || []).includes(mod)
+                              ? 'bg-indigo-600 text-white border-indigo-700'
+                              : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300'
+                            }`}
+                          >
+                             {mod}
+                          </button>
+                        ))}
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+
+          {/* Plan Feature Mapping */}
+          <div className="bg-slate-950 p-10 rounded-[48px] shadow-2xl text-white space-y-8">
+             <div>
+                <h3 className="text-2xl font-black tracking-tighter uppercase">Access Tier Logic</h3>
+                <p className="text-indigo-200/40 text-xs font-medium">Map system modules to subscription plans</p>
+             </div>
+
+             <div className="space-y-8">
+                {Object.values(SubscriptionPlan).map(plan => (
+                  <div key={plan} className="p-8 bg-white/5 border border-white/10 rounded-[40px] space-y-6">
+                     <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                           <i className="fas fa-gem text-xl"></i>
+                        </div>
+                        <h4 className="font-black text-xl uppercase tracking-tighter">{plan} Plan</h4>
+                     </div>
+                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {Object.values(SystemModule).map(mod => (
+                          <button 
+                            key={mod}
+                            onClick={() => handleTogglePlanModule(plan, mod)}
+                            className={`p-3 rounded-2xl text-[9px] font-black uppercase tracking-widest border transition-all text-center ${
+                              (planModuleMapping[plan] || []).includes(mod)
+                              ? 'bg-white text-slate-950 border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]'
+                              : 'bg-transparent text-white/30 border-white/10 hover:border-white/30'
+                            }`}
+                          >
+                             {mod}
+                          </button>
+                        ))}
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+       </div>
+
+       {/* Category Add Modal */}
+       {isAddingCategory && (
+         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-6">
+            <div className="bg-white w-full max-w-md rounded-[48px] p-12 space-y-8 shadow-2xl animate-in zoom-in-95">
+               <div className="text-center">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Add New Topology</h3>
+                  <p className="text-slate-400 text-sm font-medium">Register a new business category node</p>
+               </div>
+               <input 
+                 autoFocus
+                 type="text" 
+                 value={newCategoryName}
+                 onChange={(e) => setNewCategoryName(e.target.value)}
+                 placeholder="e.g. Workspace, Coworking..."
+                 className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 focus:ring-4 ring-indigo-50 outline-none"
+               />
+               <div className="flex gap-4">
+                  <button onClick={() => setIsAddingCategory(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs">Abort</button>
+                  <button onClick={handleAddCategory} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-indigo-100">Initialize</button>
+               </div>
+            </div>
+         </div>
+       )}
     </div>
   );
 
   const renderTenants = () => (
-    <div className="space-y-8 animate-fade-up">
-      <div className="flex items-center justify-between">
-         <h2 className="text-3xl font-black text-slate-900 tracking-tight">Tenant Lifecycle Registry</h2>
-         <div className="flex gap-4">
-            <button className="bg-slate-950 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 shadow-xl transition-all">Pre-Register Partner</button>
-         </div>
-      </div>
-      
-      <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden">
-         <div className="p-10 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
-            <div className="relative w-96">
-               <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-               <input 
-                  type="text" 
-                  placeholder="Filter by Entity Name or Entity ID..." 
-                  className="w-full bg-white border border-slate-200 rounded-2xl py-3 pl-14 pr-6 text-sm font-bold focus:ring-4 ring-indigo-50 outline-none"
-               />
-            </div>
-            <div className="flex gap-2">
-               {Object.values(SubscriptionPlan).map(plan => (
-                 <span key={plan} className="px-4 py-1.5 bg-slate-50 text-slate-400 text-[10px] font-black uppercase rounded-lg border border-slate-100">{plan}</span>
-               ))}
-            </div>
-         </div>
-         <div className="overflow-x-auto">
-            <table className="w-full text-left">
-               <thead>
-                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                     <th className="px-10 py-6">Partner Entity</th>
-                     <th className="px-10 py-6">Category</th>
-                     <th className="px-10 py-6">Identity Status</th>
-                     <th className="px-10 py-6">Verification</th>
-                     <th className="px-10 py-6 text-right">Action Protocol</th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-50">
-                  {businesses.map(biz => (
-                    <tr key={biz.id} className="hover:bg-slate-50/50 transition-all group">
-                       <td className="px-10 py-7">
-                          <div className="flex items-center gap-4">
-                             <img src={biz.images[0]} className="w-14 h-14 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform" />
-                             <div>
-                                <p className="font-black text-slate-900 text-lg group-hover:text-indigo-600 transition-colors">{biz.name}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Registered: {biz.registrationDate || '2024-12-01'}</p>
-                             </div>
-                          </div>
-                       </td>
-                       <td className="px-10 py-7 text-xs font-bold text-slate-600 uppercase tracking-widest">{biz.category}</td>
-                       <td className="px-10 py-7">
-                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${
-                            biz.subscription === SubscriptionPlan.PREMIUM ? 'bg-indigo-50 text-indigo-600' :
-                            biz.subscription === SubscriptionPlan.PRO ? 'bg-amber-50 text-amber-600' :
-                            'bg-slate-100 text-slate-500'
-                          }`}>{biz.subscription}</span>
-                       </td>
-                       <td className="px-10 py-7">{renderStatusBadge(biz.status)}</td>
-                       <td className="px-10 py-7 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button className="w-10 h-10 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-indigo-600 hover:border-indigo-600 transition-all"><i className="fas fa-eye"></i></button>
-                             <button className="w-10 h-10 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-rose-600 hover:border-rose-600 transition-all"><i className="fas fa-ban"></i></button>
-                          </div>
-                       </td>
-                    </tr>
-                  ))}
-               </tbody>
-            </table>
-         </div>
-      </div>
-    </div>
-  );
-
-  const renderMonetization = () => (
     <div className="space-y-10 animate-fade-up">
-       <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Monetization Engine</h2>
-          <button className="bg-indigo-600 text-white px-8 py-4 rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-2xl transition-all">Create New Plan</button>
+       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+             <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Tenant Governance</h2>
+             <p className="text-slate-400 text-xs font-medium">Global entity registry and operational control center</p>
+          </div>
+          <button onClick={() => setIsAddingBusiness(true)} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100">Register Manual Entity</button>
        </div>
-       
-       <div className="grid lg:grid-cols-3 gap-8">
-          {plans.map(plan => (
-            <div key={plan.id} className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-2xl transition-all">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform"></div>
-               <div className="flex justify-between items-start mb-6">
-                  <h3 className="text-2xl font-black text-slate-900">{plan.name}</h3>
-                  <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-widest">{plan.status}</span>
-               </div>
-               <div className="flex items-end gap-2 mb-8">
-                  <span className="text-5xl font-black text-slate-900 tracking-tighter">{plan.price}</span>
-                  <span className="text-slate-400 text-sm font-bold mb-2">/month</span>
-               </div>
-               <div className="p-4 bg-indigo-50 rounded-2xl mb-8 border border-indigo-100">
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Standard Commission</p>
-                  <p className="text-2xl font-black text-indigo-600">{plan.commission}</p>
-               </div>
-               <div className="space-y-4 mb-12">
-                  {plan.features.map(f => (
-                    <div key={f} className="flex items-center gap-3">
-                       <i className="fas fa-check-circle text-emerald-500"></i>
-                       <span className="text-sm font-medium text-slate-500">{f}</span>
-                    </div>
-                  ))}
-               </div>
-               <button className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all">Modify Protocol</button>
-            </div>
-          ))}
-       </div>
-    </div>
-  );
 
-  const renderLogs = () => (
-    <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden animate-fade-up">
-       <div className="p-10 border-b border-slate-50 flex items-center justify-between">
-          <h3 className="font-black text-2xl text-slate-900 tracking-tight">Governance Event Stream</h3>
-          <button className="text-indigo-600 font-black text-xs uppercase tracking-widest hover:underline">Download System Audit</button>
-       </div>
-       <div className="overflow-x-auto">
+       <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden">
           <table className="w-full text-left">
-             <thead>
-                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                   <th className="px-10 py-6">Timestamp</th>
-                   <th className="px-10 py-6">Administrator</th>
-                   <th className="px-10 py-6">Operation Matrix</th>
-                   <th className="px-10 py-6">Target Entity</th>
-                   <th className="px-10 py-6">Severity Class</th>
+             <thead className="bg-slate-50/50 border-b border-slate-100">
+                <tr>
+                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Entity</th>
+                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Topology</th>
+                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Subscription</th>
+                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Governance</th>
                 </tr>
              </thead>
              <tbody className="divide-y divide-slate-50">
-                {auditLogs.map(log => (
-                  <tr key={log.id} className="hover:bg-slate-50/50 transition-all">
-                     <td className="px-10 py-6 text-xs font-bold text-slate-400">{log.timestamp}</td>
-                     <td className="px-10 py-6">
-                        <div className="flex items-center gap-3">
-                           <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-[10px]">{log.actorName[0]}</div>
-                           <span className="text-xs font-black text-slate-800">{log.actorName}</span>
-                        </div>
-                     </td>
-                     <td className="px-10 py-6 text-xs font-bold text-slate-700">{log.action}</td>
-                     <td className="px-10 py-6 text-xs font-bold text-slate-500 uppercase">{log.target}</td>
-                     <td className="px-10 py-6">
-                        <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
-                          log.type === 'security' ? 'bg-rose-50 text-rose-600' :
-                          log.type === 'financial' ? 'bg-emerald-50 text-emerald-600' :
-                          'bg-indigo-50 text-indigo-600'
-                        }`}>{log.type}</span>
+                {businesses.map(b => (
+                  <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
+                     <td className="px-8 py-6 font-black text-slate-900">{b.name}</td>
+                     <td className="px-8 py-6 uppercase text-[10px] font-black text-slate-500">{b.category}</td>
+                     <td className="px-8 py-6 uppercase text-[10px] font-black text-indigo-600">{b.subscription}</td>
+                     <td className="px-8 py-6 text-right">
+                        <button onClick={() => setSelectedBusiness(b)} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-600 transition-all shadow-sm">Manage Node</button>
                      </td>
                   </tr>
                 ))}
              </tbody>
           </table>
+       </div>
+
+       {/* Business Detail View Overlay */}
+       {selectedBusiness && (
+         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-6">
+            <div className="bg-white w-full max-w-6xl h-[90vh] rounded-[48px] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95">
+               <div className="p-10 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">{selectedBusiness.name} <span className="text-slate-300 ml-4">Detailed View</span></h3>
+                  <button onClick={() => setSelectedBusiness(null)} className="w-12 h-12 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center hover:bg-slate-100"><i className="fas fa-times text-xl"></i></button>
+               </div>
+               <div className="flex-1 overflow-y-auto p-12 space-y-12 scrollbar-hide">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                     <div className="lg:col-span-1 p-8 bg-slate-50 rounded-[40px] space-y-6">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ownership Information</h4>
+                        <div className="flex items-center gap-4">
+                           <img src={`https://i.pravatar.cc/150?u=${selectedBusiness.ownerId}`} className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white" />
+                           <div>
+                              <p className="font-black text-slate-900 text-sm">Property Owner</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase">Registered Partner</p>
+                           </div>
+                        </div>
+                        <div className="pt-6 border-t border-slate-200 space-y-4">
+                           <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                              <span className="text-slate-400">Plan:</span>
+                              <span className="text-indigo-600">{selectedBusiness.subscription}</span>
+                           </div>
+                           <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                              <span className="text-slate-400">Status:</span>
+                              <span className={selectedBusiness.status === 'active' ? 'text-emerald-600' : 'text-rose-600'}>{selectedBusiness.status}</span>
+                           </div>
+                        </div>
+                     </div>
+                     <div className="lg:col-span-3 space-y-10">
+                        <div className="grid grid-cols-3 gap-6">
+                           <div className="p-8 bg-white border border-slate-100 rounded-[40px] shadow-sm">
+                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Lifetime Revenue</p>
+                              <p className="text-2xl font-black text-slate-900">Rp 42.8M</p>
+                           </div>
+                           <div className="p-8 bg-white border border-slate-100 rounded-[40px] shadow-sm">
+                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Active Bookings</p>
+                              <p className="text-2xl font-black text-slate-900">12</p>
+                           </div>
+                           <div className="p-8 bg-white border border-slate-100 rounded-[40px] shadow-sm">
+                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Security Score</p>
+                              <p className="text-2xl font-black text-emerald-600">98%</p>
+                           </div>
+                        </div>
+                        <div className="p-10 bg-slate-50 rounded-[40px] border border-slate-100">
+                           <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Recent Audit Events</h4>
+                           <div className="space-y-4">
+                              {['System Login', 'Unit Price Updated', 'Payout Requested', 'Module Activated'].map((ev, i) => (
+                                <div key={i} className="flex justify-between items-center py-3 border-b border-slate-200 last:border-none">
+                                   <span className="text-xs font-bold text-slate-700">{ev}</span>
+                                   <span className="text-[9px] font-black text-slate-400 uppercase">{i + 2} hours ago</span>
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+               <div className="p-10 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex gap-4">
+                     {selectedBusiness.status === 'pending' && <button onClick={() => handleUpdateBizStatus(selectedBusiness.id, 'active')} className="px-10 py-5 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-emerald-100">Approve Access</button>}
+                     {selectedBusiness.status === 'active' && <button onClick={() => handleUpdateBizStatus(selectedBusiness.id, 'suspended')} className="px-10 py-5 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-rose-100">Suspend Node</button>}
+                     {selectedBusiness.status === 'suspended' && <button onClick={() => handleUpdateBizStatus(selectedBusiness.id, 'active')} className="px-10 py-5 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest">Restore Access</button>}
+                  </div>
+                  <button className="px-10 py-5 bg-slate-950 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Terminate Forever</button>
+               </div>
+            </div>
+         </div>
+       )}
+    </div>
+  );
+
+  const renderProfile = () => (
+    <div className="max-w-4xl mx-auto space-y-12 animate-fade-up">
+       <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-12">
+          <div className="flex items-center gap-10 pb-12 border-b border-slate-50">
+             <div className="relative">
+                <img src={currentUser?.avatar} className="w-32 h-32 rounded-[40px] object-cover border-8 border-slate-50 shadow-2xl" />
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center border-4 border-white shadow-lg"><i className="fas fa-crown text-xs"></i></div>
+             </div>
+             <div>
+                <h3 className="text-4xl font-black text-slate-900 tracking-tighter mb-2">{currentUser?.name}</h3>
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">Absolute Platform Governor</p>
+             </div>
+          </div>
+          
+          <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 md:grid-cols-2 gap-10">
+             <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Administrator Alias</label>
+                <input 
+                  type="text" 
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" 
+                />
+             </div>
+             <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Governance Access Level</label>
+                <input type="text" value="Level 0 - Total Authority" disabled className="w-full bg-slate-100 border border-slate-200 rounded-3xl px-6 py-4 font-bold text-slate-400 cursor-not-allowed" />
+             </div>
+             <button 
+               disabled={isSaving}
+               className="md:col-span-2 py-5 bg-slate-950 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-600 transition-all"
+             >
+                {isSaving ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-shield-halved mr-2"></i>}
+                Update Governing Credentials
+             </button>
+          </form>
        </div>
     </div>
   );
@@ -335,38 +539,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   return (
     <div className="space-y-12 animate-fade-up">
       <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-slate-50 rounded-full blur-3xl -mr-40 -mt-40"></div>
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-10">
           <div className="flex items-center gap-8">
-            <div className="relative">
-              <div className="w-28 h-28 rounded-[36px] bg-slate-950 p-1.5 rotate-3 hover:rotate-0 transition-transform shadow-2xl flex items-center justify-center">
-                 <i className="fas fa-shield-halved text-white text-4xl"></i>
-              </div>
-              <div className={`absolute -bottom-2 -right-2 w-10 h-10 ${isMaintenanceMode ? 'bg-rose-500' : 'bg-emerald-500'} border-4 border-white rounded-full flex items-center justify-center text-white shadow-lg`}>
-                <i className={`fas ${isMaintenanceMode ? 'fa-tools' : 'fa-check-double'} text-xs`}></i>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-4 mb-2">
-                <h1 className="text-5xl font-black text-slate-900 tracking-tighter">Governance Node<span className="text-indigo-600">.</span></h1>
-                <span className="px-5 py-1.5 bg-slate-950 text-white text-[10px] font-black uppercase rounded-full tracking-[0.2em]">{t.absolute_authority}</span>
-              </div>
-              <p className="text-slate-500 font-medium text-lg flex items-center gap-3">
-                <i className="fas fa-fingerprint text-indigo-400"></i>
-                Platform Operator ID: SEU-SYS-001
-                <span className="mx-2 text-slate-200">|</span>
-                <span className={`${isMaintenanceMode ? 'text-rose-500' : 'text-emerald-600'} font-black text-sm uppercase tracking-widest`}>Mode: {isMaintenanceMode ? 'Maintenance' : 'Production Live'}</span>
-              </p>
-            </div>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Governance Node<span className="text-indigo-600">.</span></h1>
           </div>
           <div className="flex bg-slate-100/80 backdrop-blur p-2 rounded-[28px] border border-slate-200/40 gap-1 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: t.ecosystem, icon: 'fa-brain' },
+              { id: 'engine', label: 'Flex Engine', icon: 'fa-microchip' },
               { id: 'tenants', label: 'Tenants', icon: 'fa-building-shield' },
-              { id: 'monetization', label: 'Monetization', icon: 'fa-gem' },
               { id: 'finance', label: t.treasury, icon: 'fa-receipt' },
               { id: 'logs', label: 'Audit Logs', icon: 'fa-shield-halved' },
-              { id: 'settings', label: t.settings, icon: 'fa-gear' }
+              { id: 'profile', label: 'My Identity', icon: 'fa-user-lock' }
             ].map(tab => (
               <button 
                 key={tab.id}
@@ -385,143 +569,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
       <div className="max-w-[1500px] mx-auto">
         {activeTab === 'overview' && renderOverview()}
+        {activeTab === 'engine' && renderEngine()}
         {activeTab === 'tenants' && renderTenants()}
-        {activeTab === 'monetization' && renderMonetization()}
-        {activeTab === 'logs' && renderLogs()}
-        
-        {activeTab === 'finance' && (
-           <div className="space-y-10 animate-fade-up">
-              <div className="grid lg:grid-cols-3 gap-10">
-                 <div className="lg:col-span-2 space-y-10">
-                    <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden">
-                       <div className="p-10 border-b border-slate-50 bg-slate-50/30">
-                          <h3 className="font-black text-2xl text-slate-900 tracking-tight">Settlement Queue</h3>
-                       </div>
-                       <div className="overflow-x-auto">
-                          <table className="w-full text-left">
-                             <thead>
-                                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                                   <th className="px-10 py-6">Partner Entity</th>
-                                   <th className="px-10 py-6 text-right">Liability (IDR)</th>
-                                   <th className="px-10 py-6">Status</th>
-                                   <th className="px-10 py-6 text-right">Action Protocol</th>
-                                </tr>
-                             </thead>
-                             <tbody className="divide-y divide-slate-50">
-                                {payoutRequests.map(po => (
-                                  <tr key={po.id} className="hover:bg-slate-50/50 transition-all">
-                                     <td className="px-10 py-8">
-                                        <p className="font-black text-slate-800">{po.businessName}</p>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Ref: {po.id.toUpperCase()}</p>
-                                     </td>
-                                     <td className="px-10 py-8 text-right font-black text-slate-900">Rp {po.amount.toLocaleString()}</td>
-                                     <td className="px-10 py-8">
-                                        <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase border ${
-                                          po.status === 'settled' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
-                                        }`}>{po.status}</span>
-                                     </td>
-                                     <td className="px-10 py-8 text-right">
-                                        {po.status === 'pending' && (
-                                          <button 
-                                           onClick={() => handleProcessPayout(po.id)}
-                                           disabled={po.processing}
-                                           className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 ml-auto"
-                                          >
-                                             {po.processing ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>}
-                                             {po.processing ? 'Processing...' : 'Disburse via Gateway'}
-                                          </button>
-                                        )}
-                                     </td>
-                                  </tr>
-                                ))}
-                             </tbody>
-                          </table>
-                       </div>
-                    </div>
-                 </div>
-                 <div className="space-y-8">
-                    <div className="bg-slate-950 p-10 rounded-[48px] shadow-2xl text-white relative overflow-hidden">
-                       <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
-                       <div className="relative z-10 space-y-8">
-                          <h3 className="font-black text-2xl tracking-tight">Treasury Status</h3>
-                          <div className="p-8 bg-white/5 rounded-[32px] border border-white/10 space-y-6">
-                             <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Master Gateway</span>
-                                <span className="px-3 py-1 bg-emerald-500 text-white text-[9px] font-black rounded-lg uppercase">Online</span>
-                             </div>
-                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-900 shadow-xl">
-                                   <i className="fab fa-stripe-s text-2xl"></i>
-                                </div>
-                                <div>
-                                   <p className="font-black text-lg">Stripe Connect</p>
-                                   <p className="text-[10px] text-slate-400 uppercase tracking-widest">Platform Payout Node</p>
-                                </div>
-                             </div>
-                          </div>
-                          <button className="w-full py-5 bg-white text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Configure Security Keys</button>
-                       </div>
-                    </div>
-                 </div>
+        {activeTab === 'profile' && renderProfile()}
+        {['finance', 'logs', 'settings'].includes(activeTab) && (
+           <div className="py-40 text-center animate-fade-up">
+              <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 text-slate-200">
+                 <i className="fas fa-layer-group text-4xl"></i>
               </div>
-           </div>
-        )}
-
-        {activeTab === 'settings' && (
-           <div className="grid lg:grid-cols-3 gap-10 animate-fade-up">
-              <div className="lg:col-span-2 bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-12">
-                 <h3 className="text-4xl font-black text-slate-900 tracking-tighter">Global Node Config</h3>
-                 <form className="space-y-12">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                       <div className="space-y-3">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Brand Identity</label>
-                          <input type="text" defaultValue="SEULANGA" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" />
-                       </div>
-                       <div className="space-y-3">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Legal Governance Email</label>
-                          <input type="email" defaultValue="compliance@seulanga.com" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" />
-                       </div>
-                    </div>
-                    <div className="pt-10 border-t border-slate-50 space-y-10">
-                       <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">Policy Control</h4>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            { id: 'maintenance', label: 'Ecosystem Maintenance Mode', desc: 'Lock platform access for all non-governor roles.', checked: isMaintenanceMode, action: setIsMaintenanceMode },
-                            { id: 'reg', label: 'Open Public Partner Registration', desc: 'Allow businesses to submit pre-registration KYC.', checked: true },
-                            { id: 'ai', label: 'Gemini Strategy Engine', desc: 'Activate AI-driven consultant for all tenants.', checked: true },
-                            { id: 'mfa', label: 'Enforce Global MFA', desc: 'Require 2FA for all प्रशासनिक accounts.', checked: false },
-                          ].map(toggle => (
-                            <div key={toggle.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between">
-                               <div>
-                                  <p className="text-xs font-black text-slate-900">{toggle.label}</p>
-                                  <p className="text-[10px] text-slate-400 font-medium">{toggle.desc}</p>
-                               </div>
-                               <button 
-                                type="button"
-                                onClick={() => toggle.action && toggle.action(!toggle.checked)}
-                                className={`w-14 h-8 rounded-full relative transition-all ${toggle.checked ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                               >
-                                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all ${toggle.checked ? 'left-7' : 'left-1'}`}></div>
-                               </button>
-                            </div>
-                          ))}
-                       </div>
-                    </div>
-                    <div className="pt-10 border-t border-slate-50">
-                       <button type="button" className="px-12 py-5 bg-slate-950 text-white rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 shadow-2xl transition-all">Synchronize Global Policy</button>
-                    </div>
-                 </form>
-              </div>
-              <div className="space-y-10">
-                 <div className="bg-rose-50 p-10 rounded-[48px] border border-rose-100 flex flex-col items-center text-center">
-                    <div className="w-20 h-20 bg-rose-500 rounded-3xl flex items-center justify-center text-white mb-8 shadow-xl shadow-rose-200">
-                       <i className="fas fa-radiation text-3xl"></i>
-                    </div>
-                    <h4 className="font-black text-2xl text-rose-900 mb-4 tracking-tight">System Kill Switch</h4>
-                    <p className="text-rose-600 font-medium mb-10 leading-relaxed text-sm">Force global logout and terminate all active database write instances. Use only in catastrophic emergency.</p>
-                    <button className="w-full py-5 bg-rose-600 text-white rounded-3xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 transition-all shadow-xl shadow-rose-100">Initiate Cluster Lock</button>
-                 </div>
-              </div>
+              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase">{activeTab} Interface</h3>
+              <p className="text-slate-500 font-medium">Platform administrator node for {activeTab}.</p>
            </div>
         )}
       </div>
