@@ -38,12 +38,20 @@ export const SuperAdminDashboard: React.FC = () => {
   const [businesses, setBusinesses] = useState<Business[]>(MOCK_BUSINESSES);
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
+  
+  // Tenant Specific Filters
+  const [tenantFilters, setTenantFilters] = useState({
+    category: 'All',
+    status: 'All',
+    search: ''
+  });
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   
-  // Granular Filter State
+  // Granular Filter State (for Logs)
   const [filters, setFilters] = useState({
     category: 'All',
     role: 'All',
@@ -126,6 +134,38 @@ export const SuperAdminDashboard: React.FC = () => {
     setSelectedBusiness(null);
   };
 
+  const handleBulkApprovePending = () => {
+    const pendingIds = businesses.filter(b => b.status === 'pending').map(b => b.id);
+    if (pendingIds.length === 0) return;
+    
+    setBusinesses(businesses.map(b => b.status === 'pending' ? { ...b, status: 'active' } : b));
+    addLog('Bulk Approved Pending Businesses', `${pendingIds.length} entities`, 'management');
+    setSelectedBusinessIds([]);
+  };
+
+  const handleBulkSuspend = () => {
+    if (selectedBusinessIds.length === 0) return;
+    if (confirm(`Are you sure you want to suspend ${selectedBusinessIds.length} selected businesses?`)) {
+      setBusinesses(businesses.map(b => selectedBusinessIds.includes(b.id) ? { ...b, status: 'suspended' } : b));
+      addLog('Bulk Suspended Businesses', `${selectedBusinessIds.length} entities`, 'management');
+      setSelectedBusinessIds([]);
+    }
+  };
+
+  const toggleSelectBusiness = (id: string) => {
+    setSelectedBusinessIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllBusinesses = () => {
+    if (selectedBusinessIds.length === filteredBusinesses.length && filteredBusinesses.length > 0) {
+      setSelectedBusinessIds([]);
+    } else {
+      setSelectedBusinessIds(filteredBusinesses.map(b => b.id));
+    }
+  };
+
   const togglePlatformSetting = (key: keyof typeof platformSettings) => {
     const newValue = !platformSettings[key];
     setPlatformSettings({ ...platformSettings, [key]: newValue });
@@ -135,12 +175,24 @@ export const SuperAdminDashboard: React.FC = () => {
   const renderStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded-full border border-emerald-200">Active</span>;
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full border border-emerald-100 shadow-sm">
+            <i className="fas fa-check-circle text-[8px]"></i> Approved
+          </span>
+        );
       case 'suspended':
-        return <span className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-black uppercase rounded-full border border-rose-200">Suspended</span>;
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-full border border-rose-100 shadow-sm">
+            <i className="fas fa-ban text-[8px]"></i> Suspended
+          </span>
+        );
       case 'pending':
       default:
-        return <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase rounded-full border border-amber-200">Pending</span>;
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black uppercase rounded-full border border-amber-100 shadow-sm">
+            <i className="fas fa-clock text-[8px]"></i> Pending Review
+          </span>
+        );
     }
   };
 
@@ -163,6 +215,17 @@ export const SuperAdminDashboard: React.FC = () => {
 
     return matchCategory && matchRole && matchAction && matchSearch && matchStartDate && matchEndDate;
   });
+
+  const filteredBusinesses = useMemo(() => {
+    return businesses.filter(b => {
+      const matchCategory = tenantFilters.category === 'All' || b.category === tenantFilters.category;
+      const matchStatus = tenantFilters.status === 'All' || b.status === tenantFilters.status.toLowerCase();
+      const matchSearch = !tenantFilters.search || 
+        b.name.toLowerCase().includes(tenantFilters.search.toLowerCase()) || 
+        b.id.toLowerCase().includes(tenantFilters.search.toLowerCase());
+      return matchCategory && matchStatus && matchSearch;
+    });
+  }, [businesses, tenantFilters]);
 
   return (
     <div className="space-y-10 animate-fade-up">
@@ -593,53 +656,239 @@ export const SuperAdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Re-integrated Tab Contents from Previous Version for Completeness */}
       {activeTab === 'tenants' && (
-        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden animate-fade-up">
-          <div className="p-10 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
-            <div>
-              <h3 className="font-black text-2xl text-slate-900 tracking-tight">Business Verification Hub</h3>
-              <p className="text-slate-400 font-medium text-sm">Managing {businesses.length} multi-tenant business entities.</p>
+        <div className="space-y-8 animate-fade-up">
+          {/* Advanced Tenant Filtering Panel */}
+          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-2xl text-slate-900 tracking-tight">Ecosystem Search & Filters</h3>
+              <button 
+                onClick={() => setTenantFilters({category: 'All', status: 'All', search: ''})}
+                className="text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline"
+              >
+                Clear Ecosystem Filters
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Category</label>
+                <select 
+                  value={tenantFilters.category}
+                  onChange={(e) => setTenantFilters({...tenantFilters, category: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50 transition-all"
+                >
+                  <option value="All">All Categories</option>
+                  {Object.values(BusinessCategory).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Verification Status</label>
+                <select 
+                  value={tenantFilters.status}
+                  onChange={(e) => setTenantFilters({...tenantFilters, status: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50 transition-all"
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Active">Approved</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Suspended">Suspended</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Search</label>
+                <div className="relative">
+                  <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                  <input 
+                    type="text" 
+                    placeholder="Search name or ID..."
+                    value={tenantFilters.search}
+                    onChange={(e) => setTenantFilters({...tenantFilters, search: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50 transition-all"
+                  />
+                </div>
+              </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
-                  <th className="px-10 py-6">Business Entity</th>
-                  <th className="px-10 py-6">Category</th>
-                  <th className="px-10 py-6">Subscription</th>
-                  <th className="px-10 py-6">Status</th>
-                  <th className="px-10 py-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {businesses.map(biz => (
-                  <tr key={biz.id} className="hover:bg-slate-50/50 transition-all group">
-                    <td className="px-10 py-7">
-                      <div className="flex items-center gap-4">
-                        <img src={biz.images[0]} className="w-12 h-12 rounded-xl object-cover shadow-sm" />
-                        <div>
-                          <p className="font-black text-slate-900 leading-none mb-1">{biz.name}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID: {biz.id.toUpperCase()}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-7"><span className="text-xs font-bold text-slate-600">{biz.category}</span></td>
-                    <td className="px-10 py-7"><span className="text-xs font-black text-indigo-600">{biz.subscription}</span></td>
-                    <td className="px-10 py-7">{renderStatusBadge(biz.status)}</td>
-                    <td className="px-10 py-7 text-right">
-                       <button 
-                        onClick={() => { setSelectedBusiness(biz); setReviewModalOpen(true); }}
-                        className="px-6 py-2.5 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg"
-                      >
-                        Review KYB
-                      </button>
-                    </td>
+
+          <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/20">
+              <div>
+                <h3 className="font-black text-2xl text-slate-900 tracking-tight">Business Verification Hub</h3>
+                <p className="text-slate-400 font-medium text-sm">Managing {filteredBusinesses.length} matching entities.</p>
+              </div>
+              
+              <div className="flex flex-wrap gap-3">
+                <button 
+                  onClick={handleBulkApprovePending}
+                  className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-100"
+                >
+                  <i className="fas fa-check-double"></i> Approve All Pending
+                </button>
+                {selectedBusinessIds.length > 0 && (
+                  <button 
+                    onClick={handleBulkSuspend}
+                    className="px-6 py-3 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all flex items-center gap-2 shadow-lg shadow-rose-100 animate-in zoom-in duration-200"
+                  >
+                    <i className="fas fa-ban"></i> Suspend Selected ({selectedBusinessIds.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                    <th className="px-10 py-6 w-12">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedBusinessIds.length === filteredBusinesses.length && filteredBusinesses.length > 0} 
+                        onChange={toggleSelectAllBusinesses}
+                        className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </th>
+                    <th className="px-10 py-6">Business Entity</th>
+                    <th className="px-10 py-6">Category</th>
+                    <th className="px-10 py-6">Subscription</th>
+                    <th className="px-10 py-6">Verification Status</th>
+                    <th className="px-10 py-6 text-right">Operational Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredBusinesses.map(biz => (
+                    <tr key={biz.id} className={`transition-all group ${selectedBusinessIds.includes(biz.id) ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
+                      <td className="px-10 py-7">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedBusinessIds.includes(biz.id)} 
+                          onChange={() => toggleSelectBusiness(biz.id)}
+                          className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-10 py-7">
+                        <div className="flex items-center gap-4">
+                          <img src={biz.images[0]} className="w-12 h-12 rounded-xl object-cover shadow-sm ring-2 ring-white" />
+                          <div>
+                            <p className="font-black text-slate-900 leading-none mb-1 text-base">{biz.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global ID: {biz.id.toUpperCase()}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-10 py-7">
+                         <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-600">{biz.category}</span>
+                            <span className="text-[10px] text-slate-400 font-medium">Regional Target</span>
+                         </div>
+                      </td>
+                      <td className="px-10 py-7">
+                         <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                            biz.subscription === SubscriptionPlan.PREMIUM ? 'bg-violet-50 text-violet-600 border border-violet-100' :
+                            biz.subscription === SubscriptionPlan.PRO ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                            'bg-slate-100 text-slate-500 border border-slate-200'
+                         }`}>
+                            {biz.subscription}
+                         </span>
+                      </td>
+                      <td className="px-10 py-7">
+                         <div className="flex flex-col items-start gap-1">
+                            {renderStatusBadge(biz.status)}
+                            <span className="text-[9px] text-slate-400 font-medium px-1">Last update: Oct 2024</span>
+                         </div>
+                      </td>
+                      <td className="px-10 py-7 text-right">
+                         <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => { setSelectedBusiness(biz); setReviewModalOpen(true); }}
+                              className="px-6 py-2.5 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-md group-hover:scale-105"
+                            >
+                              Review Details
+                            </button>
+                            <button className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 hover:text-indigo-600 border border-transparent hover:border-indigo-100 transition-all">
+                               <i className="fas fa-ellipsis-h"></i>
+                            </button>
+                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredBusinesses.length === 0 && (
+                <div className="py-24 text-center">
+                   <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                      <i className="fas fa-ghost text-2xl"></i>
+                   </div>
+                   <h4 className="font-black text-slate-900 text-lg">No Entities Identified</h4>
+                   <p className="text-slate-400 text-xs font-medium max-w-xs mx-auto mt-2">Try adjusting your filters to locate the desired tenant matrix.</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Business Review Modal Overlay */}
+            {isReviewModalOpen && selectedBusiness && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+                 <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden border border-white p-10 space-y-8">
+                    <div className="flex justify-between items-center">
+                       <div>
+                          <h3 className="font-black text-2xl text-slate-900 tracking-tighter">Tenant Intelligence Review</h3>
+                          <p className="text-slate-400 text-xs font-medium">Verify credentials and platform compliance for {selectedBusiness.name}</p>
+                       </div>
+                       <button onClick={() => setReviewModalOpen(false)} className="text-slate-400 hover:text-indigo-600"><i className="fas fa-times text-xl"></i></button>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-6 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                       <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Type</p>
+                          <p className="font-bold text-slate-800">{selectedBusiness.category}</p>
+                       </div>
+                       <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Address</p>
+                          <p className="font-bold text-slate-800">{selectedBusiness.address}</p>
+                       </div>
+                       <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Identity Status</p>
+                          {renderStatusBadge(selectedBusiness.status)}
+                       </div>
+                       <div className="space-y-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Plan</p>
+                          <p className="font-bold text-indigo-600">{selectedBusiness.subscription}</p>
+                       </div>
+                    </div>
+
+                    <div className="space-y-4">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Governance Decisions</label>
+                       <div className="grid grid-cols-3 gap-4">
+                          <button 
+                            onClick={() => updateBusinessStatus(selectedBusiness.id, 'active')}
+                            className="flex flex-col items-center justify-center p-6 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-3xl hover:bg-emerald-100 transition-all gap-3"
+                          >
+                             <i className="fas fa-check-circle text-2xl"></i>
+                             <span className="text-[10px] font-black uppercase tracking-widest">Approve</span>
+                          </button>
+                          <button 
+                            onClick={() => updateBusinessStatus(selectedBusiness.id, 'pending')}
+                            className="flex flex-col items-center justify-center p-6 bg-amber-50 border border-amber-100 text-amber-600 rounded-3xl hover:bg-amber-100 transition-all gap-3"
+                          >
+                             <i className="fas fa-clock text-2xl"></i>
+                             <span className="text-[10px] font-black uppercase tracking-widest">Pending</span>
+                          </button>
+                          <button 
+                            onClick={() => updateBusinessStatus(selectedBusiness.id, 'suspended')}
+                            className="flex flex-col items-center justify-center p-6 bg-rose-50 border border-rose-100 text-rose-600 rounded-3xl hover:bg-rose-100 transition-all gap-3"
+                          >
+                             <i className="fas fa-ban text-2xl"></i>
+                             <span className="text-[10px] font-black uppercase tracking-widest">Suspend</span>
+                          </button>
+                       </div>
+                    </div>
+
+                    <div className="pt-4 flex gap-4">
+                       <button onClick={() => setReviewModalOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-200">Close Review</button>
+                    </div>
+                 </div>
+              </div>
+            )}
           </div>
         </div>
       )}

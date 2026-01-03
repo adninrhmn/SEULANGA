@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Business, Unit } from '../types';
 import { MOCK_UNITS } from '../constants';
 
@@ -9,13 +9,36 @@ interface PropertyDetailProps {
 }
 
 export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack }) => {
-  const [selectedUnit, setSelectedUnit] = useState<Unit>(MOCK_UNITS.filter(u => u.businessId === property.id)[0]);
+  const propertyUnits = MOCK_UNITS.filter(u => u.businessId === property.id);
+  const [selectedUnit, setSelectedUnit] = useState<Unit>(propertyUnits[0] || MOCK_UNITS[0]);
   const [isBookingSuccess, setIsBookingSuccess] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
   const handleBook = () => {
     setIsBookingSuccess(true);
     setTimeout(() => setIsBookingSuccess(false), 3000);
   };
+
+  const nextPhoto = () => {
+    setActivePhotoIndex((prev) => (prev + 1) % property.images.length);
+  };
+
+  const prevPhoto = () => {
+    setActivePhotoIndex((prev) => (prev - 1 + property.images.length) % property.images.length);
+  };
+
+  // Keyboard navigation for gallery
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isGalleryOpen) return;
+      if (e.key === 'ArrowRight') nextPhoto();
+      if (e.key === 'ArrowLeft') prevPhoto();
+      if (e.key === 'Escape') setIsGalleryOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGalleryOpen]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 animate-fade-up pb-20">
@@ -25,21 +48,36 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack
 
       {/* Hero Gallery */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-[500px]">
-        <div className="md:col-span-2 rounded-[40px] overflow-hidden shadow-2xl relative">
-          <img src={property.images[0]} className="w-full h-full object-cover" />
+        <div 
+          onClick={() => { setActivePhotoIndex(0); setIsGalleryOpen(true); }}
+          className="md:col-span-2 rounded-[40px] overflow-hidden shadow-2xl relative cursor-pointer group"
+        >
+          <img src={property.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Main property" />
           <div className="absolute top-8 left-8 flex gap-3">
              <span className="bg-white/90 backdrop-blur-md px-5 py-2 rounded-full text-[10px] font-black text-indigo-600 uppercase tracking-widest shadow-lg">{property.category}</span>
              <span className="bg-indigo-600 px-5 py-2 rounded-full text-[10px] font-black text-white uppercase tracking-widest shadow-lg">Verified Luxury</span>
           </div>
+          <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+             <i className="fas fa-expand text-white text-3xl"></i>
+          </div>
         </div>
         <div className="grid grid-rows-2 gap-4">
-          <div className="rounded-[40px] overflow-hidden shadow-xl">
-             <img src={property.images[1] || property.images[0]} className="w-full h-full object-cover" />
+          <div 
+            onClick={() => { setActivePhotoIndex(1); setIsGalleryOpen(true); }}
+            className="rounded-[40px] overflow-hidden shadow-xl cursor-pointer group relative"
+          >
+             <img src={property.images[1] || property.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Gallery image 1" />
+             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <i className="fas fa-expand text-white text-2xl"></i>
+             </div>
           </div>
-          <div className="rounded-[40px] overflow-hidden shadow-xl relative group cursor-pointer">
-             <img src={property.images[0]} className="w-full h-full object-cover" />
-             <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-white font-black uppercase tracking-[0.2em] text-xs">View 12+ Photos</span>
+          <div 
+            onClick={() => { setActivePhotoIndex(0); setIsGalleryOpen(true); }}
+            className="rounded-[40px] overflow-hidden shadow-xl relative group cursor-pointer"
+          >
+             <img src={property.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Gallery image 2" />
+             <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center transition-all group-hover:bg-slate-950/20">
+                <span className="text-white font-black uppercase tracking-[0.2em] text-xs">View {property.images.length}+ Photos</span>
              </div>
           </div>
         </div>
@@ -105,10 +143,13 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack
                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Room / Unit Type</p>
                    <select 
                     value={selectedUnit.id}
-                    onChange={(e) => setSelectedUnit(MOCK_UNITS.find(u => u.id === e.target.value)!)}
+                    onChange={(e) => {
+                      const unit = propertyUnits.find(u => u.id === e.target.value);
+                      if (unit) setSelectedUnit(unit);
+                    }}
                     className="w-full bg-transparent font-black text-sm text-slate-800 outline-none"
                    >
-                     {MOCK_UNITS.filter(u => u.businessId === property.id).map(u => (
+                     {propertyUnits.map(u => (
                        <option key={u.id} value={u.id}>{u.name} (Max {u.capacity})</option>
                      ))}
                    </select>
@@ -159,6 +200,63 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack
            </div>
         </div>
       </div>
+
+      {/* Photo Gallery Modal */}
+      {isGalleryOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-xl animate-in fade-in duration-300">
+           {/* Close Button */}
+           <button 
+             onClick={() => setIsGalleryOpen(false)}
+             className="absolute top-10 right-10 w-14 h-14 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white text-2xl transition-all z-[110]"
+           >
+             <i className="fas fa-times"></i>
+           </button>
+
+           {/* Navigation Controls */}
+           <button 
+             onClick={(e) => { e.stopPropagation(); prevPhoto(); }}
+             className="absolute left-10 top-1/2 -translate-y-1/2 w-16 h-16 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center text-white text-3xl transition-all group z-[110]"
+           >
+             <i className="fas fa-chevron-left group-hover:-translate-x-1 transition-transform"></i>
+           </button>
+           <button 
+             onClick={(e) => { e.stopPropagation(); nextPhoto(); }}
+             className="absolute right-10 top-1/2 -translate-y-1/2 w-16 h-16 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center text-white text-3xl transition-all group z-[110]"
+           >
+             <i className="fas fa-chevron-right group-hover:translate-x-1 transition-transform"></i>
+           </button>
+
+           {/* Image Container */}
+           <div className="relative w-full max-w-7xl h-[80vh] flex flex-col items-center justify-center p-6">
+              <div className="w-full h-full relative overflow-hidden rounded-[40px] shadow-2xl">
+                 <img 
+                   src={property.images[activePhotoIndex]} 
+                   className="w-full h-full object-contain select-none transition-all duration-500" 
+                   alt={`Gallery view ${activePhotoIndex + 1}`} 
+                 />
+              </div>
+
+              {/* Thumbnails / Progress */}
+              <div className="mt-10 flex gap-4 overflow-x-auto scrollbar-hide p-4 max-w-full">
+                 {property.images.map((img, i) => (
+                   <button 
+                     key={i} 
+                     onClick={() => setActivePhotoIndex(i)}
+                     className={`w-24 h-16 rounded-xl overflow-hidden shrink-0 transition-all border-2 ${
+                       activePhotoIndex === i ? 'border-indigo-500 scale-110 shadow-lg shadow-indigo-500/20' : 'border-transparent opacity-50 hover:opacity-100'
+                     }`}
+                   >
+                     <img src={img} className="w-full h-full object-cover" alt={`Thumbnail ${i + 1}`} />
+                   </button>
+                 ))}
+              </div>
+
+              <div className="absolute bottom-[-60px] text-white/50 font-black tracking-widest text-[10px] uppercase">
+                 Asset {activePhotoIndex + 1} of {property.images.length} • {property.name}
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
