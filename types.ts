@@ -1,4 +1,3 @@
-
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   BUSINESS_OWNER = 'BUSINESS_OWNER',
@@ -73,6 +72,52 @@ export interface HomepageBanner {
   order: number;
 }
 
+export interface Complaint {
+  id: string;
+  guestId: string;
+  businessId: string;
+  bookingId?: string;
+  subject: string;
+  message: string;
+  status: 'pending' | 'investigating' | 'resolved';
+  createdAt: string;
+}
+
+export interface Dispute {
+  id: string;
+  bookingId: string;
+  businessId: string;
+  guestId: string;
+  claimAmount: number;
+  reason: string;
+  status: 'open' | 'resolved_guest' | 'resolved_business' | 'rejected';
+  createdAt: string;
+}
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+}
+
+export interface NotificationRule {
+  id: string;
+  event: string;
+  target: UserRole;
+  channels: ('email' | 'push' | 'sms')[];
+  isEnabled: boolean;
+}
+
+export interface PaymentGateway {
+  id: string;
+  name: string;
+  isActive: boolean;
+  apiKey: string;
+  merchantId: string;
+  environment: 'sandbox' | 'production';
+}
+
 export interface Inquiry {
   id: string;
   guestId: string;
@@ -142,6 +187,7 @@ export interface Business {
   contactPhone?: string;
   isFeaturedRequested?: boolean;
   isFeatured?: boolean;
+  penaltyCount?: number;
   socials?: {
     instagram?: string;
     website?: string;

@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS, TRANSLATIONS, MOCK_BOOKINGS, DEFAULT_CATEGORY_MODULE_MAP } from '../constants';
-import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule, BookingStatus, Booking, SEOMetadata, HomepageBanner } from '../types';
+import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule, BookingStatus, Booking, SEOMetadata, HomepageBanner, Complaint, Dispute, EmailTemplate, NotificationRule, PaymentGateway } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, ComposedChart, Line, Legend, PieChart, Pie, Cell
@@ -51,7 +50,7 @@ const PERMISSION_KEYS = [
 ];
 
 interface SuperAdminDashboardProps {
-  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings' | 'profile' | 'engine' | 'accounts' | 'matrix' | 'oversight' | 'quality';
+  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings' | 'profile' | 'engine' | 'accounts' | 'matrix' | 'oversight' | 'quality' | 'trust';
   onNavigate: (view: string, subView?: string) => void;
   language: 'id' | 'en';
   moduleConfigs: CategoryModuleConfig;
@@ -74,13 +73,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     subscriptionExpiry: b.subscriptionExpiry || '2025-12-31',
     isTrial: b.isTrial || false,
     isFeaturedRequested: Math.random() > 0.7,
-    status: Math.random() > 0.8 ? 'pending' : b.status
+    status: Math.random() > 0.8 ? 'pending' : b.status,
+    penaltyCount: 0
   })));
   
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [bookings] = useState<Booking[]>(MOCK_BOOKINGS);
   const [plans, setPlans] = useState<SubPlan[]>(INITIAL_PLANS);
   const [transactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS.map(r => ({ ...r, status: 'pending' })));
   
   // Platform Quality States
   const [seoMetadata, setSeoMetadata] = useState<SEOMetadata>({
@@ -91,6 +92,36 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const [banners, setBanners] = useState<HomepageBanner[]>([
     { id: 'b-1', title: 'REDEFINING HOSPITALITY.', subtitle: 'The elite multi-tenant ecosystem for premium property management.', imageUrl: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070', isActive: true, order: 1 }
+  ]);
+
+  // User Trust States
+  const [complaints, setComplaints] = useState<Complaint[]>([
+    { id: 'cmp-1', guestId: 'u4', businessId: 'b1', subject: 'Cleanliness Issue', message: 'Room was not cleaned upon arrival. Dust everywhere.', status: 'pending', createdAt: '2024-12-28' }
+  ]);
+  const [disputes, setDisputes] = useState<Dispute[]>([
+    { id: 'dsp-1', bookingId: 'bk1', businessId: 'b1', guestId: 'u4', claimAmount: 500000, reason: 'Double charged for breakfast', status: 'open', createdAt: '2024-12-29' }
+  ]);
+
+  // Global Settings States
+  const [systemConfig, setSystemConfig] = useState({
+    currency: 'IDR',
+    language: 'id',
+    timezone: 'Asia/Jakarta'
+  });
+
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([
+    { id: 'tpl-1', name: 'Welcome Email', subject: 'Welcome to SEULANGA Ecosystem', body: 'Hello {{name}}, welcome to our elite property network...' },
+    { id: 'tpl-2', name: 'Booking Confirmed', subject: 'Reservation Verified: #{{bookingId}}', body: 'Your stay at {{property}} has been confirmed...' }
+  ]);
+
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([
+    { id: 'rule-1', event: 'New Business Registration', target: UserRole.SUPER_ADMIN, channels: ['email', 'push'], isEnabled: true },
+    { id: 'rule-2', event: 'Payment Dispute Filed', target: UserRole.SUPER_ADMIN, channels: ['email', 'push'], isEnabled: true }
+  ]);
+
+  const [paymentGateways, setPaymentGateways] = useState<PaymentGateway[]>([
+    { id: 'gw-1', name: 'Midtrans', isActive: true, apiKey: 'SB-Mid-Client-XXXX', merchantId: 'GXXXXXX', environment: 'sandbox' },
+    { id: 'gw-2', name: 'Stripe', isActive: false, apiKey: 'sk_test_XXXX', merchantId: 'acct_XXXX', environment: 'sandbox' }
   ]);
 
   // Monetization States
@@ -108,14 +139,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const t = TRANSLATIONS[language];
 
-  // Logic for Global Oversight & Anomaly Detection
+  // Governance Logic
   const filteredBookings = useMemo(() => {
     return bookings.filter(bk => {
       const matchBiz = oversightBizFilter === 'ALL' || bk.businessId === oversightBizFilter;
       const matchDate = !oversightDateFilter || bk.checkIn.includes(oversightDateFilter);
       const isOutlierPrice = bk.totalPrice > 4000000;
-      const isUnverifiedPayment = !bk.verifiedPayment && bk.status === BookingStatus.CONFIRMED;
-      const isAnomaly = isOutlierPrice || isUnverifiedPayment;
+      const isAnomaly = isOutlierPrice || (!bk.verifiedPayment && bk.status === BookingStatus.CONFIRMED);
       if (showAnomaliesOnly) return matchBiz && matchDate && isAnomaly;
       return matchBiz && matchDate;
     });
@@ -128,6 +158,31 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     return reasons.join(", ");
   };
 
+  const [profileName, setProfileName] = useState(currentUser?.name || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Trust Actions
+  const handleModerateReview = (id: string, status: 'approved' | 'rejected') => {
+    setReviews(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    alert(`Review ${id} node ${status.toUpperCase()} protocol executed.`);
+  };
+
+  const handleUpdateComplaint = (id: string, status: 'investigating' | 'resolved') => {
+    setComplaints(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+    alert(`Complaint ${id} transition to ${status.toUpperCase()}. Governance updated.`);
+  };
+
+  const handleResolveDispute = (id: string, status: 'resolved_guest' | 'resolved_business' | 'rejected') => {
+    setDisputes(prev => prev.map(d => d.id === id ? { ...d, status } : d));
+    alert(`Dispute ${id} finalized: ${status.toUpperCase()}. Treasury cleared.`);
+  };
+
+  const handleApplyPenalty = (bizId: string) => {
+    setBusinesses(prev => prev.map(b => b.id === bizId ? { ...b, penaltyCount: (b.penaltyCount || 0) + 1 } : b));
+    alert(`Penalty applied to node ${bizId}. Trust score recalculated.`);
+  };
+
+  // Pre-existing actions
   const handleUpdatePlanPrice = (id: string, newPrice: number) => {
     setPlans(prev => prev.map(p => p.id === id ? { ...p, price: newPrice } : p));
   };
@@ -151,10 +206,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     alert(`Featured status approved for node ${bizId}.`);
   };
 
-  const [profileName, setProfileName] = useState(currentUser?.name || '');
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Subscription Control Actions
   const handleUpdateTenantSubscription = (bizId: string, plan: SubscriptionPlan, expiry: string, isTrial: boolean) => {
     setBusinesses(prev => prev.map(b => b.id === bizId ? { ...b, subscription: plan, subscriptionExpiry: expiry, isTrial } : b));
     setIsSubModalOpen(false);
@@ -169,6 +220,329 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setBusinesses(prev => prev.map(b => b.id === bizId ? { ...b, status: b.status === 'suspended' ? 'active' : 'suspended' } : b));
     alert(`Entity ${bizId} status toggled. Ecosystem node access restricted/restored.`);
   };
+
+  // New Global Config Actions
+  const handleToggleRule = (id: string) => {
+    setNotificationRules(prev => prev.map(r => r.id === id ? { ...r, isEnabled: !r.isEnabled } : r));
+  };
+
+  const handleSaveGateway = (id: string, data: Partial<PaymentGateway>) => {
+    setPaymentGateways(prev => prev.map(g => g.id === id ? { ...g, ...data } : g));
+    alert(`Gateway ${id} node updated.`);
+  };
+
+  const renderSettings = () => (
+    <div className="space-y-12 animate-fade-up">
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          {/* Localization Hub */}
+          <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Localization Hub</h3>
+                   <p className="text-slate-400 text-xs font-medium">Global platform defaults</p>
+                </div>
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-globe"></i>
+                </div>
+             </div>
+             
+             <div className="space-y-6">
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Base Currency Node</label>
+                   <select 
+                      value={systemConfig.currency}
+                      onChange={(e) => setSystemConfig({...systemConfig, currency: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:ring-4 ring-indigo-50"
+                   >
+                      <option value="IDR">Indonesian Rupiah (IDR)</option>
+                      <option value="USD">US Dollar (USD)</option>
+                      <option value="EUR">Euro (EUR)</option>
+                   </select>
+                </div>
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Default System Lexicon</label>
+                   <select 
+                      value={systemConfig.language}
+                      onChange={(e) => setSystemConfig({...systemConfig, language: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:ring-4 ring-indigo-50"
+                   >
+                      <option value="id">Bahasa Indonesia</option>
+                      <option value="en">English (US)</option>
+                   </select>
+                </div>
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Platform Chrono-Zone</label>
+                   <select 
+                      value={systemConfig.timezone}
+                      onChange={(e) => setSystemConfig({...systemConfig, timezone: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:ring-4 ring-indigo-50"
+                   >
+                      <option value="Asia/Jakarta">WIB (UTC+7)</option>
+                      <option value="Asia/Makassar">WITA (UTC+8)</option>
+                      <option value="Asia/Jayapura">WIT (UTC+9)</option>
+                   </select>
+                </div>
+                <button className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-indigo-600 transition-all">Synchronize Hub</button>
+             </div>
+          </div>
+
+          {/* Notification Engine */}
+          <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Notification Rules</h3>
+                   <p className="text-slate-400 text-xs font-medium">Define automated event-trigger logic</p>
+                </div>
+                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-bell"></i>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+                {notificationRules.map(rule => (
+                   <div key={rule.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-all">
+                      <div>
+                         <p className="font-black text-slate-900 text-sm uppercase">{rule.event}</p>
+                         <p className="text-[10px] text-slate-400 font-bold uppercase">Target: {rule.target} • Channels: {rule.channels.join(', ')}</p>
+                      </div>
+                      <button 
+                        onClick={() => handleToggleRule(rule.id)}
+                        className={`w-14 h-8 rounded-full transition-all relative ${rule.isEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                      >
+                         <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${rule.isEnabled ? 'right-1' : 'left-1'}`}></div>
+                      </button>
+                   </div>
+                ))}
+             </div>
+             <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">+ Define New Trigger Protocol</button>
+          </div>
+       </div>
+
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Email Template Architect */}
+          <div className="bg-slate-950 p-12 rounded-[48px] shadow-2xl text-white space-y-10">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-3xl font-black tracking-tighter uppercase">Email Architect</h3>
+                   <p className="text-indigo-200/40 text-xs font-medium">Manage master communication templates</p>
+                </div>
+                <button className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center hover:bg-white/20 transition-all">
+                   <i className="fas fa-plus"></i>
+                </button>
+             </div>
+
+             <div className="space-y-6">
+                {emailTemplates.map(tpl => (
+                   <div key={tpl.id} className="p-8 bg-white/5 border border-white/10 rounded-[40px] space-y-4 group hover:bg-white/10 transition-all">
+                      <div className="flex justify-between items-start">
+                         <div>
+                            <h4 className="font-black text-xl uppercase tracking-tighter">{tpl.name}</h4>
+                            <p className="text-xs text-indigo-400/60 font-medium">Subject: {tpl.subject}</p>
+                         </div>
+                         <button className="text-[10px] font-black text-white/40 hover:text-white uppercase tracking-widest">Edit Payload</button>
+                      </div>
+                      <div className="p-4 bg-black/40 rounded-2xl text-[10px] font-mono text-white/30 truncate">
+                         {tpl.body}
+                      </div>
+                   </div>
+                ))}
+             </div>
+          </div>
+
+          {/* Payment Gateway Matrix */}
+          <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-10">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Payment Matrix</h3>
+                   <p className="text-slate-400 text-xs font-medium">Configure financial clearing gateways</p>
+                </div>
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-credit-card"></i>
+                </div>
+             </div>
+
+             <div className="space-y-8">
+                {paymentGateways.map(gw => (
+                   <div key={gw.id} className="space-y-4 pb-8 border-b border-slate-100 last:border-none">
+                      <div className="flex items-center justify-between mb-4">
+                         <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${gw.isActive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                               <i className="fas fa-plug text-xs"></i>
+                            </div>
+                            <h4 className="font-black text-slate-900 text-sm uppercase">{gw.name}</h4>
+                         </div>
+                         <div className="flex items-center gap-3">
+                            <span className={`text-[8px] font-black px-3 py-1 rounded-full border uppercase ${gw.environment === 'sandbox' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>{gw.environment}</span>
+                            <button 
+                              onClick={() => handleSaveGateway(gw.id, { isActive: !gw.isActive })}
+                              className={`text-[9px] font-black uppercase tracking-widest ${gw.isActive ? 'text-rose-500' : 'text-emerald-600'}`}
+                            >
+                               {gw.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+                         </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">API Node Key</label>
+                            <input type="password" value={gw.apiKey} readOnly className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-mono" />
+                         </div>
+                         <div className="space-y-2">
+                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Merchant Identity</label>
+                            <input type="text" value={gw.merchantId} readOnly className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-mono" />
+                         </div>
+                      </div>
+                   </div>
+                ))}
+                <button className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-indigo-600 transition-all">Authorize Gateway Changes</button>
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+
+  const renderTrust = () => (
+    <div className="space-y-12 animate-fade-up">
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Review Moderation */}
+          <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Review Moderation</h3>
+                   <p className="text-slate-400 text-xs font-medium">Verify guest feedback authenticity</p>
+                </div>
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-comment-dots"></i>
+                </div>
+             </div>
+             <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
+                {reviews.filter(r => r.status === 'pending').map(r => (
+                  <div key={r.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl space-y-3">
+                     <div className="flex justify-between items-start">
+                        <div>
+                           <p className="font-black text-slate-900 text-sm">{r.guestName}</p>
+                           <p className="text-[10px] text-slate-400 font-bold uppercase">{r.createdAt}</p>
+                        </div>
+                        <div className="flex text-amber-400 text-xs">
+                           {[...Array(r.rating)].map((_, i) => <i key={i} className="fas fa-star"></i>)}
+                        </div>
+                     </div>
+                     <p className="text-xs text-slate-600 italic">"{r.comment}"</p>
+                     <div className="flex gap-2 pt-2">
+                        <button onClick={() => handleModerateReview(r.id, 'rejected')} className="flex-1 py-2 bg-white text-rose-500 border border-rose-100 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all">Reject</button>
+                        <button onClick={() => handleModerateReview(r.id, 'approved')} className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all">Approve</button>
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+
+          {/* Complaint Handling */}
+          <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Complaint Center</h3>
+                   <p className="text-slate-400 text-xs font-medium">Mitigate guest escalations across nodes</p>
+                </div>
+                <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-headset"></i>
+                </div>
+             </div>
+             <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-hide">
+                {complaints.map(c => (
+                  <div key={c.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex flex-col gap-4">
+                     <div className="flex justify-between items-center">
+                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                          c.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                        }`}>{c.status}</span>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{c.createdAt}</p>
+                     </div>
+                     <div>
+                        <p className="font-black text-slate-900 text-sm uppercase mb-1">{c.subject}</p>
+                        <p className="text-xs text-slate-500 line-clamp-2">{c.message}</p>
+                     </div>
+                     <div className="flex gap-3">
+                        <button onClick={() => handleUpdateComplaint(c.id, 'investigating')} className="flex-1 py-2 bg-white text-indigo-600 border border-indigo-100 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-50">Investigate</button>
+                        <button onClick={() => handleUpdateComplaint(c.id, 'resolved')} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700">Resolve</button>
+                     </div>
+                  </div>
+                ))}
+             </div>
+          </div>
+       </div>
+
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          {/* Dispute Resolution Ledger */}
+          <div className="lg:col-span-2 bg-slate-950 p-12 rounded-[48px] shadow-2xl text-white space-y-10">
+             <div>
+                <h3 className="text-3xl font-black tracking-tighter uppercase">Dispute Resolution Ledger</h3>
+                <p className="text-indigo-200/40 text-xs font-medium">Finalize financial claims and refund sequences</p>
+             </div>
+             <div className="overflow-x-auto rounded-[32px] border border-white/10 bg-white/5">
+                <table className="w-full text-left">
+                   <thead className="border-b border-white/10 bg-white/5">
+                      <tr>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Dispute Case</th>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Value</th>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Protocol</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-white/5">
+                      {disputes.map(d => (
+                        <tr key={d.id} className="hover:bg-white/5 transition-all">
+                           <td className="px-8 py-6">
+                              <p className="font-black text-white">{d.reason}</p>
+                              <p className="text-[10px] text-white/30 font-bold uppercase">{d.id} • {d.bookingId}</p>
+                           </td>
+                           <td className="px-8 py-6 font-black text-emerald-400">Rp {d.claimAmount.toLocaleString()}</td>
+                           <td className="px-8 py-6 flex gap-2">
+                              {d.status === 'open' ? (
+                                <>
+                                  <button onClick={() => handleResolveDispute(d.id, 'resolved_guest')} className="px-3 py-1.5 bg-indigo-600 rounded-lg text-[9px] font-black uppercase">Guest +</button>
+                                  <button onClick={() => handleResolveDispute(d.id, 'resolved_business')} className="px-3 py-1.5 bg-white/10 rounded-lg text-[9px] font-black uppercase">Biz +</button>
+                                  <button onClick={() => handleResolveDispute(d.id, 'rejected')} className="px-3 py-1.5 bg-rose-600/20 text-rose-400 rounded-lg text-[9px] font-black uppercase">Void</button>
+                                </>
+                              ) : (
+                                <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em]">{d.status}</span>
+                              )}
+                           </td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+
+          {/* Business Penalty HUD */}
+          <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Penalty Protocols</h3>
+                   <p className="text-slate-400 text-xs font-medium">Disciplinary actions for partner nodes</p>
+                </div>
+                <div className="w-12 h-12 bg-slate-950 text-white rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-shield-virus"></i>
+                </div>
+             </div>
+             <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 scrollbar-hide">
+                {businesses.map(b => (
+                  <div key={b.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-between group hover:border-rose-200 transition-all">
+                     <div>
+                        <p className="font-black text-slate-900 text-sm uppercase">{b.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                           <span className="text-[9px] font-black text-slate-400 uppercase">Penalties:</span>
+                           <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${b.penaltyCount && b.penaltyCount > 0 ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{b.penaltyCount || 0}</span>
+                        </div>
+                     </div>
+                     <button onClick={() => handleApplyPenalty(b.id)} className="w-10 h-10 bg-white border border-rose-100 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm">
+                        <i className="fas fa-circle-exclamation text-xs"></i>
+                     </button>
+                  </div>
+                ))}
+             </div>
+          </div>
+       </div>
+    </div>
+  );
 
   const renderQuality = () => (
     <div className="space-y-12 animate-fade-up">
@@ -836,12 +1210,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             {[
               { id: 'overview', label: t.ecosystem, icon: 'fa-brain' },
               { id: 'oversight', label: 'Oversight', icon: 'fa-crosshairs' },
-              { id: 'quality', label: 'Quality Control', icon: 'fa-certificate' },
+              { id: 'quality', label: 'Quality', icon: 'fa-certificate' },
+              { id: 'trust', label: 'User Trust', icon: 'fa-handshake-angle' },
               { id: 'monetization', label: 'Monetization', icon: 'fa-coins' },
               { id: 'finance', label: t.treasury, icon: 'fa-receipt' },
               { id: 'engine', label: 'Flex Engine', icon: 'fa-microchip' },
               { id: 'tenants', label: 'Tenants', icon: 'fa-building-shield' },
               { id: 'accounts', label: 'Accounts', icon: 'fa-users-gear' },
+              { id: 'settings', label: 'System Config', icon: 'fa-gears' },
               { id: 'profile', label: 'My Identity', icon: 'fa-user-lock' }
             ].map(tab => (
               <button 
@@ -863,9 +1239,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'oversight' && renderOversight()}
         {activeTab === 'quality' && renderQuality()}
+        {activeTab === 'trust' && renderTrust()}
         {activeTab === 'monetization' && renderMonetization()}
         {activeTab === 'finance' && renderFinance()}
         {activeTab === 'tenants' && renderTenants()}
+        {activeTab === 'settings' && renderSettings()}
         {activeTab === 'engine' && (
            <div className="py-40 text-center animate-fade-up">
               <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase">Topology Engine</h3>
