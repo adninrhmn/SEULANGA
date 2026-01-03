@@ -53,6 +53,8 @@ export interface Business {
   images: string[];
   rating: number;
   location: { lat: number; lng: number };
+  commissionRate?: number; // Platform percentage
+  serviceFee?: number; // Guest flat fee
 }
 
 export interface Unit {
@@ -65,6 +67,28 @@ export interface Unit {
   available: boolean;
   amenities: string[];
   images: string[];
+}
+
+export interface Transaction {
+  id: string;
+  type: 'subscription' | 'commission' | 'ad_fee' | 'service_fee';
+  amount: number;
+  status: 'pending' | 'completed' | 'failed';
+  businessId?: string;
+  guestId?: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface AdCampaign {
+  id: string;
+  businessId: string;
+  propertyId?: string;
+  type: 'featured' | 'banner' | 'priority_search';
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'ended' | 'scheduled';
+  budget: number;
 }
 
 export interface Booking {
@@ -85,5 +109,16 @@ export interface Message {
   senderId: string;
   receiverId: string;
   content: string;
+  timestamp: string;
+}
+
+export interface AuditLog {
+  id: string;
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  action: string;
+  target: string;
+  type: 'security' | 'financial' | 'management' | 'system';
   timestamp: string;
 }

@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { User, UserRole } from './types';
 import { LandingPage } from './views/LandingPage';
 import { OwnerDashboard } from './views/OwnerDashboard';
+import { SuperAdminDashboard } from './views/SuperAdminDashboard';
 import { MOCK_USERS } from './constants';
 
 const App: React.FC = () => {
@@ -56,6 +57,18 @@ const App: React.FC = () => {
         return <LandingPage onNavigate={setCurrentView} />;
       case 'owner-dash':
         return <OwnerDashboard />;
+      case 'super-admin':
+        return <SuperAdminDashboard />;
+      case 'explore':
+        return (
+          <div className="text-center py-20 animate-fade-up">
+            <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-8">
+               <i className="fas fa-search text-4xl text-indigo-600"></i>
+            </div>
+            <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Marketplace Under Construction</h2>
+            <p className="text-slate-500 font-medium max-w-md mx-auto">We are populating our ecosystem with the most premium properties in Northern Sumatra.</p>
+          </div>
+        );
       case 'login':
         return (
           <div className="max-w-xl mx-auto py-20 px-6">
