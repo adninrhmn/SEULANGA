@@ -31,12 +31,24 @@ export const OwnerDashboard: React.FC = () => {
   // Modals State
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  // Calendar State for UI
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
 
   useEffect(() => {
     fetchInsights();
   }, [business.category]);
+
+  useEffect(() => {
+    if (editingUnit) {
+      setBlockedDates(editingUnit.blockedDates || []);
+    } else {
+      setBlockedDates([]);
+    }
+  }, [editingUnit]);
 
   const fetchInsights = async () => {
     setInsights("Connecting to Gemini AI Engine...");
@@ -63,7 +75,8 @@ export const OwnerDashboard: React.FC = () => {
       available: editingUnit ? editingUnit.available : true,
       amenities: (formData.get('amenities') as string).split(',').map(s => s.trim()),
       images: editingUnit?.images || ['https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=2071'],
-      description: formData.get('description') as string
+      description: formData.get('description') as string,
+      blockedDates: blockedDates
     };
 
     if (editingUnit) {
@@ -74,6 +87,15 @@ export const OwnerDashboard: React.FC = () => {
     
     setShowUnitModal(false);
     setEditingUnit(null);
+    setBlockedDates([]);
+  };
+
+  const toggleBlockedDate = (dateStr: string) => {
+    setBlockedDates(prev => 
+      prev.includes(dateStr) 
+        ? prev.filter(d => d !== dateStr) 
+        : [...prev, dateStr]
+    );
   };
 
   const handleDeleteUnit = (id: string) => {
@@ -114,6 +136,92 @@ export const OwnerDashboard: React.FC = () => {
       }
       return u;
     }));
+  };
+
+  const renderCalendar = () => {
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
+    
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    
+    const monthName = currentCalendarDate.toLocaleString('default', { month: 'long' });
+    
+    const calendarDays = [];
+    // Padding for first week
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      calendarDays.push(<div key={`empty-${i}`} className="h-12 w-full"></div>);
+    }
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = date.toISOString().split('T')[0];
+      const isBlocked = blockedDates.includes(dateStr);
+      const isToday = new Date().toISOString().split('T')[0] === dateStr;
+      
+      calendarDays.push(
+        <button
+          key={day}
+          type="button"
+          onClick={() => toggleBlockedDate(dateStr)}
+          className={`h-12 w-full rounded-xl flex flex-col items-center justify-center relative transition-all border ${
+            isBlocked 
+              ? 'bg-rose-50 border-rose-200 text-rose-600' 
+              : 'bg-white border-slate-100 text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/30'
+          } ${isToday ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}
+        >
+          <span className={`text-xs font-bold ${isBlocked ? 'font-black' : ''}`}>{day}</span>
+          {isBlocked && (
+            <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
+          )}
+        </button>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+           <div className="flex flex-col">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">Availability Protocol</h4>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{monthName} {year}</p>
+           </div>
+           <div className="flex gap-2">
+              <button 
+                type="button" 
+                onClick={() => setCurrentCalendarDate(new Date(year, month - 1))}
+                className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+              >
+                <i className="fas fa-chevron-left text-[10px]"></i>
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setCurrentCalendarDate(new Date(year, month + 1))}
+                className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+              >
+                <i className="fas fa-chevron-right text-[10px]"></i>
+              </button>
+           </div>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center mb-2">
+          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+            <span key={d} className="text-[8px] font-black text-slate-300 uppercase">{d}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {calendarDays}
+        </div>
+        <div className="flex items-center gap-4 pt-2">
+           <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Blocked / Maintenance</span>
+           </div>
+           <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-slate-200 rounded-full"></div>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Available</span>
+           </div>
+        </div>
+      </div>
+    );
   };
 
   const renderOverview = () => (
@@ -258,10 +366,15 @@ export const OwnerDashboard: React.FC = () => {
           <div key={unit.id} className="bg-white rounded-[40px] overflow-hidden border border-slate-100 hover:shadow-2xl transition-all group flex flex-col h-full">
             <div className="h-64 relative overflow-hidden">
                <img src={unit.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-               <div className="absolute top-6 left-6 flex gap-2">
+               <div className="absolute top-6 left-6 flex flex-col gap-2">
                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border backdrop-blur-md ${unit.available ? 'bg-emerald-50/80 text-emerald-700 border-emerald-100' : 'bg-rose-50/80 text-rose-700 border-rose-100'}`}>
-                    {unit.available ? 'Available' : 'Maintenance'}
+                    {unit.available ? 'Active' : 'Offline'}
                  </span>
+                 {unit.blockedDates && unit.blockedDates.length > 0 && (
+                   <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border backdrop-blur-md bg-amber-50/80 text-amber-700 border-amber-100">
+                     {unit.blockedDates.length} Dates Blocked
+                   </span>
+                 )}
                </div>
                <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                  <button onClick={() => { setEditingUnit(unit); setShowUnitModal(true); }} className="w-10 h-10 bg-white text-slate-900 rounded-xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-lg">
@@ -491,71 +604,105 @@ export const OwnerDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Unit Modal (Combined Add/Edit) */}
+      {/* Unit Modal (Combined Add/Edit + Availability Calendar) */}
       {showUnitModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden border border-white">
-            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-3xl font-black text-slate-900 tracking-tighter">
-                {editingUnit ? 'Refine Asset Strategy' : 'Architect New Asset'}
-              </h3>
-              <button onClick={() => { setShowUnitModal(false); setEditingUnit(null); }} className="text-slate-400 hover:text-indigo-600 transition-all"><i className="fas fa-times text-xl"></i></button>
-            </div>
-            <form onSubmit={handleSaveUnit} className="p-10 space-y-8 max-h-[70vh] overflow-y-auto scrollbar-hide">
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit Designation</label>
-                  <input name="name" defaultValue={editingUnit?.name} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" placeholder="Ex: Deluxe Sea View #204" />
+          <div className="bg-white w-full max-w-5xl rounded-[40px] shadow-2xl overflow-hidden border border-white flex flex-col lg:flex-row h-[85vh]">
+            
+            {/* Form Section */}
+            <div className="flex-1 flex flex-col border-r border-slate-100">
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 shrink-0">
+                <h3 className="text-3xl font-black text-slate-900 tracking-tighter">
+                  {editingUnit ? 'Refine Asset Strategy' : 'Architect New Asset'}
+                </h3>
+              </div>
+              <form id="unitForm" onSubmit={handleSaveUnit} className="p-8 space-y-8 overflow-y-auto scrollbar-hide flex-1">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit Designation</label>
+                    <input name="name" defaultValue={editingUnit?.name} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" placeholder="Ex: Deluxe Sea View #204" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Type</label>
+                    <select name="type" defaultValue={editingUnit?.type || 'Room'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50">
+                      <option value="Room">Standard Room</option>
+                      <option value="Suite">Premium Suite</option>
+                      <option value="House">Residential Unit</option>
+                      <option value="Villa">Private Villa</option>
+                      <option value="Apartment">Service Apartment</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Type</label>
-                  <select name="type" defaultValue={editingUnit?.type || 'Room'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50">
-                    <option value="Room">Standard Room</option>
-                    <option value="Suite">Premium Suite</option>
-                    <option value="House">Residential Unit</option>
-                    <option value="Villa">Private Villa</option>
-                    <option value="Apartment">Service Apartment</option>
-                  </select>
+
+                <div className="grid grid-cols-2 gap-8">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pricing Strategy (IDR / Night)</label>
+                      <input name="price" type="number" defaultValue={editingUnit?.price} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="1500000" />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operational Capacity (Pax)</label>
+                      <input name="capacity" type="number" defaultValue={editingUnit?.capacity} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="2" />
+                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-8">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pricing Strategy (IDR / Night)</label>
-                    <input name="price" type="number" defaultValue={editingUnit?.price} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="1500000" />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operational Capacity (Pax)</label>
-                    <input name="capacity" type="number" defaultValue={editingUnit?.capacity} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="2" />
-                 </div>
-              </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amenities Matrix (Comma Separated)</label>
+                  <input name="amenities" defaultValue={editingUnit?.amenities.join(', ')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="WiFi, AC, Rooftop Access, Minibar" />
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amenities Matrix (Comma Separated)</label>
-                <input name="amenities" defaultValue={editingUnit?.amenities.join(', ')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="WiFi, AC, Rooftop Access, Minibar" />
-              </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technical Description</label>
+                  <textarea name="description" defaultValue={editingUnit?.description} rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none resize-none" placeholder="Describe the layout and key features of this specific unit..." />
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technical Description</label>
-                <textarea name="description" defaultValue={editingUnit?.description} rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none resize-none" placeholder="Describe the layout and key features of this specific unit..." />
-              </div>
-
-              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
-                 <i className="fas fa-camera text-slate-400 text-xl"></i>
-                 <div className="flex-1">
-                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Image Gallery Protocol</p>
-                    <p className="text-xs text-slate-400 font-medium">High-resolution assets (min 1920x1080) are required for marketplace visibility.</p>
-                 </div>
-                 <button type="button" className="px-5 py-2.5 bg-white border border-slate-200 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-600 transition-all">Upload Assets</button>
-              </div>
-
-              <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2">
-                <button type="button" onClick={() => { setShowUnitModal(false); setEditingUnit(null); }} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest">Abort</button>
-                <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">
+                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
+                   <i className="fas fa-camera text-slate-400 text-xl"></i>
+                   <div className="flex-1">
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Gallery Protocol</p>
+                      <p className="text-xs text-slate-400 font-medium">Marketplace standards require high-resolution visuals.</p>
+                   </div>
+                   <button type="button" className="px-5 py-2.5 bg-white border border-slate-200 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-600 transition-all">Upload</button>
+                </div>
+              </form>
+              <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex gap-4 shrink-0">
+                <button type="button" onClick={() => { setShowUnitModal(false); setEditingUnit(null); }} className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest">Abort</button>
+                <button form="unitForm" type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">
                   {editingUnit ? 'Finalize Re-Strategy' : 'Deploy Asset'}
                 </button>
               </div>
-            </form>
+            </div>
+
+            {/* Calendar Section */}
+            <div className="w-full lg:w-[400px] bg-slate-50/30 p-8 flex flex-col space-y-8">
+               <div className="flex justify-between items-center lg:hidden">
+                  <h3 className="font-black text-slate-900">Availability</h3>
+                  <button onClick={() => { setShowUnitModal(false); setEditingUnit(null); }} className="text-slate-400"><i className="fas fa-times"></i></button>
+               </div>
+               
+               <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+                  {renderCalendar()}
+               </div>
+
+               <div className="p-6 bg-indigo-600 rounded-[32px] shadow-2xl text-white space-y-4">
+                  <div className="flex items-center gap-3">
+                     <i className="fas fa-shield-halved"></i>
+                     <h4 className="font-black text-sm uppercase tracking-widest">Governance Rule</h4>
+                  </div>
+                  <p className="text-xs text-indigo-100 leading-relaxed font-medium">
+                     Blocked dates will be instantly removed from the SEULANGA marketplace. Use this to handle maintenance, private bookings, or seasonal adjustments.
+                  </p>
+                  <div className="pt-2">
+                     <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest bg-white/10 p-3 rounded-xl border border-white/10">
+                        <span>Total Blocked</span>
+                        <span className="bg-white text-indigo-600 px-2 py-0.5 rounded-md">{blockedDates.length} Days</span>
+                     </div>
+                  </div>
+               </div>
+               
+               <div className="mt-auto text-center">
+                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">Managed via SEULANGA Core</p>
+               </div>
+            </div>
           </div>
         </div>
       )}

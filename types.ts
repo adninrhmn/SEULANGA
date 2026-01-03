@@ -92,6 +92,7 @@ export interface Unit {
   amenities: string[];
   images: string[];
   description?: string;
+  blockedDates?: string[]; // ISO format YYYY-MM-DD
 }
 
 export interface Transaction {
