@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 // Removed MOCK_ADS from the imports as it does not exist in constants.tsx
 import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS, TRANSLATIONS } from '../constants';
-import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus } from '../types';
+import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule } from '../types';
 import { generateWelcomeEmail } from '../services/geminiService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
@@ -34,9 +34,19 @@ interface SuperAdminDashboardProps {
   activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings';
   onNavigate: (view: string, subView?: string) => void;
   language: 'id' | 'en';
+  // Added moduleConfigs and onUpdateModuleConfigs to props
+  moduleConfigs: CategoryModuleConfig;
+  onUpdateModuleConfigs: (configs: CategoryModuleConfig) => void;
 }
 
-export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ activeTab, onNavigate, language }) => {
+// Updated component signature to destructure new props
+export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ 
+  activeTab, 
+  onNavigate, 
+  language,
+  moduleConfigs,
+  onUpdateModuleConfigs
+}) => {
   const [businesses, setBusinesses] = useState<Business[]>(MOCK_BUSINESSES);
   const [plans, setPlans] = useState<SubPlan[]>(INITIAL_PLANS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);

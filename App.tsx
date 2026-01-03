@@ -20,14 +20,11 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [language, setLanguage] = useState<'id' | 'en'>('id');
   
-  // Shared state for category module mapping
   const [moduleConfigs, setModuleConfigs] = useState<CategoryModuleConfig>(DEFAULT_CATEGORY_MODULE_MAP);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('seulanga_lang') as 'id' | 'en';
     if (savedLang) setLanguage(savedLang);
-    
-    // In a real app, we'd load saved moduleConfigs from an API
     
     setTimeout(() => {
       setIsLoading(false);
@@ -51,14 +48,21 @@ const App: React.FC = () => {
 
     setCurrentUser(user as User);
     
-    if (role === UserRole.BUSINESS_OWNER) setCurrentView('owner-dash');
-    else if (role === UserRole.SUPER_ADMIN) {
+    // Redirect logic after login
+    if (selectedProperty) {
+      setCurrentView('property-detail');
+    } else if (role === UserRole.BUSINESS_OWNER) {
+      setCurrentView('owner-dash');
+    } else if (role === UserRole.SUPER_ADMIN) {
       setCurrentView('super-admin');
       setAdminSubView('overview');
+    } else if (role === UserRole.ADMIN_STAFF) {
+      setCurrentView('staff-dash');
+    } else if (role === UserRole.GUEST) {
+      setCurrentView('guest-dash');
+    } else {
+      setCurrentView('landing');
     }
-    else if (role === UserRole.ADMIN_STAFF) setCurrentView('staff-dash');
-    else if (role === UserRole.GUEST) setCurrentView('guest-dash');
-    else setCurrentView('landing');
   };
 
   const handleLogout = () => {
@@ -78,7 +82,17 @@ const App: React.FC = () => {
 
   const navigateToProperty = (property: Business) => {
     setSelectedProperty(property);
+    // Kita izinkan melihat detail, tapi pemesanan nanti dicek di PropertyDetail
     setCurrentView('property-detail');
+  };
+
+  const handleBookingAttempt = (property: Business) => {
+    if (!currentUser) {
+      setSelectedProperty(property);
+      setCurrentView('login');
+      return;
+    }
+    navigateToProperty(property);
   };
 
   if (isLoading) {
@@ -124,7 +138,14 @@ const App: React.FC = () => {
       case 'guest-dash':
         return <GuestDashboard />;
       case 'property-detail':
-        return selectedProperty ? <PropertyDetail property={selectedProperty} onBack={() => handleNavigate('explore')} /> : <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
+        return selectedProperty ? (
+          <PropertyDetail 
+            property={selectedProperty} 
+            onBack={() => handleNavigate('explore')} 
+            currentUser={currentUser}
+            onLoginRequired={() => handleNavigate('login')}
+          />
+        ) : <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
       case 'explore':
         return <Marketplace onSelectProperty={navigateToProperty} />;
       case 'login':

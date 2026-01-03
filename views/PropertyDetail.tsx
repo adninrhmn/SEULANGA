@@ -1,21 +1,28 @@
 
 import React, { useState, useEffect } from 'react';
-import { Business, Unit } from '../types';
+import { Business, Unit, User } from '../types';
 import { MOCK_UNITS } from '../constants';
 
 interface PropertyDetailProps {
   property: Business;
   onBack: () => void;
+  currentUser: User | null;
+  onLoginRequired: () => void;
 }
 
-export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack }) => {
+export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack, currentUser, onLoginRequired }) => {
   const propertyUnits = MOCK_UNITS.filter(u => u.businessId === property.id);
   const [selectedUnit, setSelectedUnit] = useState<Unit>(propertyUnits[0] || MOCK_UNITS[0]);
   const [isBookingSuccess, setIsBookingSuccess] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [showAuthAlert, setShowAuthAlert] = useState(false);
 
   const handleBook = () => {
+    if (!currentUser) {
+      setShowAuthAlert(true);
+      return;
+    }
     setIsBookingSuccess(true);
     setTimeout(() => setIsBookingSuccess(false), 3000);
   };
@@ -28,7 +35,6 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack
     setActivePhotoIndex((prev) => (prev - 1 + property.images.length) % property.images.length);
   };
 
-  // Keyboard navigation for gallery
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isGalleryOpen) return;
@@ -173,7 +179,9 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack
 
               <button 
                 onClick={handleBook}
-                className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-95 transition-all"
+                className={`w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl transition-all ${
+                  isBookingSuccess ? 'bg-emerald-600' : 'bg-indigo-600 hover:scale-[1.02] shadow-indigo-100'
+                }`}
               >
                 {isBookingSuccess ? 'Success! Redirecting...' : 'Initiate Booking'}
               </button>
@@ -200,6 +208,35 @@ export const PropertyDetail: React.FC<PropertyDetailProps> = ({ property, onBack
            </div>
         </div>
       </div>
+
+      {/* Auth Requirement Alert Modal */}
+      {showAuthAlert && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl p-10 text-center space-y-8 border border-slate-100">
+              <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto text-3xl">
+                 <i className="fas fa-user-lock"></i>
+              </div>
+              <div>
+                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase mb-2">Login Required</h3>
+                 <p className="text-slate-500 font-medium">Silakan login sebagai tamu terlebih dahulu untuk melakukan pemesanan properti.</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                 <button 
+                   onClick={onLoginRequired}
+                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100"
+                 >
+                   Login Sekarang
+                 </button>
+                 <button 
+                   onClick={() => setShowAuthAlert(false)}
+                   className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest"
+                 >
+                   Kembali
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Photo Gallery Modal */}
       {isGalleryOpen && (
