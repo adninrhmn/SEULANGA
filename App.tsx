@@ -14,6 +14,7 @@ import { MOCK_USERS } from './constants';
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<string>('landing');
+  const [adminSubView, setAdminSubView] = useState<string>('overview');
   const [selectedProperty, setSelectedProperty] = useState<Business | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -28,7 +29,10 @@ const App: React.FC = () => {
     if (user) {
       setCurrentUser(user);
       if (role === UserRole.BUSINESS_OWNER) setCurrentView('owner-dash');
-      else if (role === UserRole.SUPER_ADMIN) setCurrentView('super-admin');
+      else if (role === UserRole.SUPER_ADMIN) {
+        setCurrentView('super-admin');
+        setAdminSubView('overview');
+      }
       else if (role === UserRole.ADMIN_STAFF) setCurrentView('staff-dash');
       else if (role === UserRole.GUEST) setCurrentView('guest-dash');
       else setCurrentView('landing');
@@ -39,6 +43,16 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setCurrentView('landing');
     setSelectedProperty(null);
+  };
+
+  const handleNavigate = (view: string, subView?: string) => {
+    setCurrentView(view);
+    if (view === 'super-admin' && subView) {
+      setAdminSubView(subView);
+    } else if (view === 'super-admin' && !subView) {
+      // Default subview if none provided
+      setAdminSubView('overview');
+    }
   };
 
   const navigateToProperty = (property: Business) => {
@@ -67,17 +81,17 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case 'landing':
-        return <LandingPage onNavigate={setCurrentView} onSelectProperty={navigateToProperty} />;
+        return <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
       case 'owner-dash':
         return <OwnerDashboard />;
       case 'super-admin':
-        return <SuperAdminDashboard />;
+        return <SuperAdminDashboard activeTab={adminSubView as any} />;
       case 'staff-dash':
         return <StaffDashboard />;
       case 'guest-dash':
         return <GuestDashboard />;
       case 'property-detail':
-        return selectedProperty ? <PropertyDetail property={selectedProperty} onBack={() => setCurrentView('explore')} /> : <LandingPage onNavigate={setCurrentView} onSelectProperty={navigateToProperty} />;
+        return selectedProperty ? <PropertyDetail property={selectedProperty} onBack={() => handleNavigate('explore')} /> : <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
       case 'explore':
         return <Marketplace onSelectProperty={navigateToProperty} />;
       case 'login':
@@ -143,7 +157,7 @@ const App: React.FC = () => {
           </div>
         );
       default:
-        return <LandingPage onNavigate={setCurrentView} onSelectProperty={navigateToProperty} />;
+        return <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
     }
   };
 
@@ -151,8 +165,9 @@ const App: React.FC = () => {
     <Layout 
       user={currentUser} 
       onLogout={handleLogout} 
-      onNavigate={setCurrentView}
+      onNavigate={handleNavigate}
       currentView={currentView}
+      currentSubView={adminSubView}
     >
       {renderView()}
     </Layout>

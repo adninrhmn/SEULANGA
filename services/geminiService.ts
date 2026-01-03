@@ -13,7 +13,6 @@ export const getBusinessInsights = async (businessData: any) => {
         thinkingConfig: { thinkingBudget: 0 }
       }
     });
-    // Accessing text as a property on the response object.
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);
@@ -27,10 +26,32 @@ export const generatePropertyDescription = async (details: { name: string, categ
       model: 'gemini-3-flash-preview',
       contents: `Write a compelling, SEO-friendly property description for ${details.name}, a ${details.category}. Amenities include: ${details.amenities.join(', ')}.`,
     });
-    // Accessing text as a property on the response object.
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);
     return "";
+  }
+};
+
+export const generateWelcomeEmail = async (partnerName: string, businessName: string, category: string) => {
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Draft a professional welcome email for a new property partner on the SEULANGA platform. 
+      Partner Name: ${partnerName}
+      Business: ${businessName}
+      Category: ${category}
+      
+      The email should:
+      1. Congratulate them on joining the elite ecosystem.
+      2. Provide a link to their dashboard (https://seulanga.com/partner-dash).
+      3. Mention a "Quick-Start Guide" attached.
+      4. Highlight one specific benefit of using SEULANGA for their specific business category.
+      Keep it high-end, encouraging, and under 200 words.`,
+    });
+    return response.text;
+  } catch (error) {
+    console.error("Gemini Error:", error);
+    return `Welcome to SEULANGA, ${partnerName}! Your property ${businessName} is now live. Access your dashboard at https://seulanga.com/partner-dash to begin managing your assets.`;
   }
 };

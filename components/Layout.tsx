@@ -7,11 +7,12 @@ interface LayoutProps {
   children: React.ReactNode;
   user: User | null;
   onLogout: () => void;
-  onNavigate: (view: string) => void;
+  onNavigate: (view: string, subView?: string) => void;
   currentView: string;
+  currentSubView?: string;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavigate, currentView }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavigate, currentView, currentSubView }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -40,7 +41,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
 
   const navItems = [
     { label: 'Dashboard', icon: 'fa-grid-2', view: 'landing', roles: [UserRole.GUEST, null] },
-    { label: 'Platform Controls', icon: 'fa-shield-halved', view: 'super-admin', roles: [UserRole.SUPER_ADMIN] },
+    { 
+      label: 'Platform Controls', 
+      icon: 'fa-shield-halved', 
+      view: 'super-admin', 
+      roles: [UserRole.SUPER_ADMIN],
+      children: [
+        { id: 'overview', label: 'Ecosystem Intelligence', icon: 'fa-brain' },
+        { id: 'analytics', label: 'Platform Analytics', icon: 'fa-chart-pie' },
+        { id: 'monetization', label: 'Subscription Plans', icon: 'fa-sack-dollar' },
+        { id: 'tenants', label: 'Tenant Onboarding', icon: 'fa-id-badge' },
+        { id: 'reviews', label: 'Review Moderation', icon: 'fa-star-half-stroke' },
+        { id: 'finance', label: 'Payouts & Flows', icon: 'fa-receipt' },
+        { id: 'logs', label: 'System Audit Logs', icon: 'fa-clock-rotate-left' },
+        { id: 'settings', label: 'Platform Settings', icon: 'fa-gear' }
+      ]
+    },
     { label: 'Business Hub', icon: 'fa-hotel', view: 'owner-dash', roles: [UserRole.BUSINESS_OWNER] },
     { label: 'Ops Desk', icon: 'fa-clipboard-list', view: 'staff-dash', roles: [UserRole.ADMIN_STAFF] },
     { label: 'My Bookings', icon: 'fa-calendar-days', view: 'guest-dash', roles: [UserRole.GUEST] },
@@ -80,20 +96,43 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
 
           <nav className="flex-1 overflow-y-auto py-8 px-4 space-y-1.5 scrollbar-hide">
             {filteredNav.map((item) => (
-              <button
-                key={item.view}
-                onClick={() => onNavigate(item.view)}
-                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  currentView === item.view 
-                    ? 'sidebar-item-active text-indigo-600' 
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className={`${currentView === item.view ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
-                   <i className={`fas ${item.icon} text-lg w-6`}></i>
-                </div>
-                {isSidebarOpen && <span>{item.label}</span>}
-              </button>
+              <React.Fragment key={item.view}>
+                <button
+                  onClick={() => onNavigate(item.view)}
+                  className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                    currentView === item.view 
+                      ? 'sidebar-item-active text-indigo-600' 
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className={`${currentView === item.view ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                    <i className={`fas ${item.icon} text-lg w-6`}></i>
+                  </div>
+                  {isSidebarOpen && <span>{item.label}</span>}
+                </button>
+                
+                {/* Sub-menu implementation */}
+                {isSidebarOpen && item.children && currentView === item.view && (
+                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-slate-100 pl-4 animate-in slide-in-from-left-2 duration-300">
+                    {item.children.map(child => (
+                      <button
+                        key={child.id}
+                        onClick={() => onNavigate(item.view, child.id)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                          currentSubView === child.id 
+                            ? 'bg-indigo-50 text-indigo-600' 
+                            : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <i className={`fas ${child.icon} w-4`}></i>
+                          {child.label}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </nav>
 

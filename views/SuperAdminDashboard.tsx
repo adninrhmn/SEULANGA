@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_ADS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS } from '../constants';
-import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review } from '../types';
+import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction } from '../types';
+import { generateWelcomeEmail } from '../services/geminiService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const revenueData = [
@@ -22,12 +23,6 @@ const userGrowthData = [
   { month: 'Dec', users: 3100, partners: 148 },
 ];
 
-const subDistribution = [
-  { name: 'Basic', value: 45, color: '#94a3b8' },
-  { name: 'Pro', value: 35, color: '#6366f1' },
-  { name: 'Premium', value: 20, color: '#4f46e5' },
-];
-
 interface SubPlan {
   id: string;
   name: string;
@@ -46,8 +41,11 @@ const INITIAL_PLANS: SubPlan[] = [
   { id: 'p3', name: 'Enterprise Premium', price: 'Rp 1.200.000', billingCycle: 'Monthly', trialPeriodDays: 30, commission: '5%', maxUnits: 999, features: ['24/7 Dedicated Support', 'Homepage Featured Ad', 'AI Business Insights', 'Custom Reports', 'API Access'], status: 'active' },
 ];
 
-export const SuperAdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'ads' | 'logs' | 'settings'>('tenants');
+interface SuperAdminDashboardProps {
+  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings';
+}
+
+export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ activeTab }) => {
   const [isBackupRunning, setIsBackupRunning] = useState(false);
   const [plans, setPlans] = useState<SubPlan[]>(INITIAL_PLANS);
   const [editingPlan, setEditingPlan] = useState<SubPlan | null>(null);
@@ -61,10 +59,28 @@ export const SuperAdminDashboard: React.FC = () => {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const [onboardingSuccessMsg, setOnboardingSuccessMsg] = useState<string | null>(null);
 
   // Review Moderation State
   const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
+  const [reviewFilters, setReviewFilters] = useState({
+    status: 'All',
+    search: ''
+  });
   
+  // Finance State
+  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [payoutRequests, setPayoutRequests] = useState([
+    { id: 'po1', businessName: 'Grand Seulanga Hotel', amount: 12500000, status: 'pending', requestedAt: '2024-12-28' },
+    { id: 'po2', businessName: 'Pine Hill Guesthouse', amount: 4200000, status: 'pending', requestedAt: '2024-12-29' }
+  ]);
+  const [gatewayConfig, setGatewayConfig] = useState({
+    provider: 'Stripe',
+    status: 'Operational',
+    mode: 'Live'
+  });
+
   // Tenant Specific Filters
   const [tenantFilters, setTenantFilters] = useState({
     category: 'All',
@@ -144,24 +160,69 @@ export const SuperAdminDashboard: React.FC = () => {
     const review = reviews.find(r => r.id === id);
     if (review) {
       setReviews(reviews.map(r => r.id === id ? { ...r, status } : r));
-      addLog(`Review Moderation: ${status.toUpperCase()}`, `Review ID: ${id} for ${MOCK_BUSINESSES.find(b => b.id === review.businessId)?.name}`, 'management');
+      addLog(`Review Moderation: ${status.toUpperCase()}`, `Review ID: ${id}`, 'management');
     }
   };
 
-  const updateBusinessStatus = (id: string, status: BusinessStatus) => {
-    const biz = businesses.find(b => b.id === id);
-    setBusinesses(businesses.map(b => b.id === id ? { ...b, status } : b));
-    if (biz) {
-        let actionLabel = 'Updated Status';
-        if (status === 'active') actionLabel = 'Approved Business Registration';
-        else if (status === 'rejected') actionLabel = 'Rejected Business Registration';
-        else if (status === 'info_requested') actionLabel = 'Requested Additional Business Info';
-        else if (status === 'suspended') actionLabel = 'Suspended Business Account';
-        
-        addLog(actionLabel, biz.name, 'management');
+  const handleFlagReview = (id: string) => {
+    const reason = prompt("Enter reason for flagging this review (e.g., Harassment, Fake Review, Spam):");
+    if (!reason) return;
+
+    setReviews(reviews.map(r => 
+      r.id === id 
+        ? { ...r, flags: [...(r.flags || []), reason], status: 'rejected' as const } 
+        : r
+    ));
+    addLog(`Flagged Review`, `Review ID: ${id} - Reason: ${reason}`, 'security');
+  };
+
+  const handleApprovePayout = (id: string) => {
+    const payout = payoutRequests.find(p => p.id === id);
+    if (payout && confirm(`Confirm disbursement of Rp ${payout.amount.toLocaleString()} to ${payout.businessName}?`)) {
+      setPayoutRequests(payoutRequests.map(p => p.id === id ? { ...p, status: 'settled' } : p));
+      addLog('Approved Payout Request', payout.businessName, 'financial');
     }
-    setReviewModalOpen(false);
-    setSelectedBusiness(null);
+  };
+
+  const updateBusinessStatus = async (id: string, status: BusinessStatus) => {
+    const biz = businesses.find(b => b.id === id);
+    if (!biz) return;
+
+    // Start UI process
+    if (status === 'active') setIsOnboarding(true);
+
+    setBusinesses(businesses.map(b => b.id === id ? { ...b, status } : b));
+    
+    let actionLabel = 'Updated Status';
+    if (status === 'active') actionLabel = 'Approved Business Registration';
+    else if (status === 'rejected') actionLabel = 'Rejected Business Registration';
+    else if (status === 'info_requested') actionLabel = 'Requested Additional Business Info';
+    else if (status === 'suspended') actionLabel = 'Suspended Business Account';
+    
+    addLog(actionLabel, biz.name, 'management');
+
+    // Trigger AI Welcome Protocol if activated
+    if (status === 'active') {
+      const owner = MOCK_USERS.find(u => u.id === biz.ownerId);
+      const emailBody = await generateWelcomeEmail(owner?.name || 'Partner', biz.name, biz.category);
+      
+      // Simulate dispatch delay
+      await new Promise(res => setTimeout(res, 1500));
+      
+      setOnboardingSuccessMsg(emailBody);
+      setIsOnboarding(false);
+      addLog('Dispatched Welcome Protocol', biz.name, 'system');
+      
+      // Clear success message after some time and close modal
+      setTimeout(() => {
+        setOnboardingSuccessMsg(null);
+        setReviewModalOpen(false);
+        setSelectedBusiness(null);
+      }, 5000);
+    } else {
+      setReviewModalOpen(false);
+      setSelectedBusiness(null);
+    }
   };
 
   const handleBulkApprovePending = () => {
@@ -252,7 +313,16 @@ export const SuperAdminDashboard: React.FC = () => {
     });
   }, [businesses, tenantFilters]);
 
-  // Audit Logs Export Logic
+  const filteredReviews = useMemo(() => {
+    return reviews.filter(r => {
+      const matchStatus = reviewFilters.status === 'All' || r.status === reviewFilters.status.toLowerCase();
+      const matchSearch = !reviewFilters.search || 
+        r.guestName.toLowerCase().includes(reviewFilters.search.toLowerCase()) ||
+        r.comment.toLowerCase().includes(reviewFilters.search.toLowerCase());
+      return matchStatus && matchSearch;
+    });
+  }, [reviews, reviewFilters]);
+
   const handleExportJSON = () => {
     const dataStr = JSON.stringify(auditLogs, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -430,7 +500,37 @@ export const SuperAdminDashboard: React.FC = () => {
       {/* Business Review/Verification Modal */}
       {isReviewModalOpen && selectedBusiness && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border border-white flex flex-col md:flex-row h-[80vh]">
+           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border border-white flex flex-col md:flex-row h-[80vh] relative">
+              
+              {/* Automated Onboarding Overlay */}
+              {(isOnboarding || onboardingSuccessMsg) && (
+                <div className="absolute inset-0 z-[110] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-10 text-center">
+                  <div className="max-w-md animate-fade-up">
+                    {isOnboarding ? (
+                      <div className="space-y-6">
+                        <div className="w-24 h-24 border-t-4 border-indigo-500 rounded-full animate-spin mx-auto"></div>
+                        <h3 className="text-2xl font-black text-white">Deploying Welcome Protocol...</h3>
+                        <p className="text-indigo-200/60 font-medium">Gemini AI is crafting a personalized onboarding experience for your new partner.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center text-white text-3xl mx-auto shadow-2xl shadow-emerald-500/20">
+                          <i className="fas fa-paper-plane"></i>
+                        </div>
+                        <h3 className="text-2xl font-black text-white">Welcome Packet Dispatched</h3>
+                        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 text-left max-h-64 overflow-y-auto scrollbar-hide">
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">Transmission Summary:</p>
+                          <p className="text-xs text-indigo-50 font-medium whitespace-pre-wrap leading-relaxed">
+                            {onboardingSuccessMsg}
+                          </p>
+                        </div>
+                        <p className="text-indigo-200/60 text-xs font-bold uppercase tracking-widest">Partner will be notified via secure relay.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="md:w-1/2 bg-slate-50 border-r border-slate-100 flex flex-col">
                 <div className="h-64 relative overflow-hidden">
                    <img src={selectedBusiness.images[0]} className="w-full h-full object-cover" />
@@ -535,9 +635,8 @@ export const SuperAdminDashboard: React.FC = () => {
             {isBackupRunning ? 'Syncing Ecosystem...' : 'Global System Backup'}
           </button>
           <button 
-            onClick={() => setActiveTab('settings')}
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black text-sm transition-all shadow-xl shadow-indigo-900/40">
-            Platform Settings
+            Platform Security Status
           </button>
         </div>
       </div>
@@ -552,38 +651,13 @@ export const SuperAdminDashboard: React.FC = () => {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 relative z-10">{stat.label}</p>
             <div className="flex items-end justify-between relative z-10">
               <h3 className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</h3>
-              <span className={`text-xs font-black ${stat.trend.includes('+') ? 'text-emerald-600' : 'text-slate-500'}`}>{stat.trend}</span>
+              <span className={`text-xs font-black ${stat.trend.includes('+') ? 'text-emerald-600' : 'text-slate-50'}`}>{stat.trend}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Navigation Matrix */}
-      <div className="flex bg-white p-2 rounded-[28px] border border-slate-200/60 shadow-sm overflow-x-auto scrollbar-hide">
-        {[
-          { id: 'overview', label: 'Ecosystem Intelligence', icon: 'fa-brain' },
-          { id: 'analytics', label: 'Platform Analytics', icon: 'fa-chart-pie' },
-          { id: 'monetization', label: 'Subscription Plans', icon: 'fa-sack-dollar' },
-          { id: 'tenants', label: 'Tenant Onboarding', icon: 'fa-id-badge' },
-          { id: 'reviews', label: 'Review Moderation', icon: 'fa-star-half-stroke' },
-          { id: 'finance', label: 'Payouts & Flows', icon: 'fa-receipt' },
-          { id: 'logs', label: 'System Audit Logs', icon: 'fa-clock-rotate-left' },
-          { id: 'settings', label: 'Platform Settings', icon: 'fa-gear' }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-3 px-8 py-4 rounded-2xl text-sm font-black transition-all whitespace-nowrap ${
-              activeTab === tab.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <i className={`fas ${tab.icon}`}></i>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Contents */}
+      {/* Tab Contents - Now controlled via sidebar navigation */}
       {activeTab === 'overview' && (
         <div className="grid lg:grid-cols-3 gap-10">
           <div className="lg:col-span-2 bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
@@ -817,93 +891,137 @@ export const SuperAdminDashboard: React.FC = () => {
 
       {activeTab === 'reviews' && (
         <div className="space-y-8 animate-fade-up">
-           <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Review Moderation Matrix</h2>
-                <p className="text-slate-500 font-medium text-sm">Review, flag, and filter platform-wide guest feedback.</p>
+           <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Review Moderation Matrix</h2>
+                  <p className="text-slate-500 font-medium text-sm">Audit, verify, or sanction guest feedback protocols.</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Protocol Status</label>
+                  <select 
+                    value={reviewFilters.status}
+                    onChange={(e) => setReviewFilters({...reviewFilters, status: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50"
+                  >
+                    <option value="All">All Feedbacks</option>
+                    <option value="pending">Awaiting Verification</option>
+                    <option value="approved">Whitelisted</option>
+                    <option value="rejected">Blacklisted / Flagged</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Search Content / Guest</label>
+                  <input 
+                    type="text" 
+                    placeholder="Keywords or Name..."
+                    value={reviewFilters.search}
+                    onChange={(e) => setReviewFilters({...reviewFilters, search: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-6 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50"
+                  />
+                </div>
               </div>
            </div>
 
            <div className="grid gap-6">
-              {reviews.map(review => {
+              {filteredReviews.map(review => {
                 const business = MOCK_BUSINESSES.find(b => b.id === review.businessId);
                 return (
                   <div key={review.id} className={`bg-white p-8 rounded-[40px] border shadow-sm transition-all flex flex-col md:flex-row gap-8 ${
-                    review.status === 'pending' ? 'border-indigo-100' : 'border-slate-50'
+                    review.status === 'pending' ? 'border-indigo-100 ring-2 ring-indigo-50' : 'border-slate-50'
                   }`}>
-                    <div className="flex-1 space-y-4">
+                    <div className="flex-1 space-y-5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                           <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center font-black text-indigo-600 shadow-sm border border-slate-100">
+                           <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg shadow-inner border border-indigo-100">
                              {review.guestName[0]}
                            </div>
                            <div>
-                              <p className="font-black text-slate-900">{review.guestName}</p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reviewed {business?.name}</p>
+                              <p className="font-black text-slate-900 text-lg">{review.guestName}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <i className="fas fa-hotel"></i> Entity: {business?.name}
+                              </p>
                            </div>
                         </div>
-                        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-lg font-black text-sm">
+                        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-4 py-2 rounded-xl font-black text-base border border-amber-100">
                            <i className="fas fa-star"></i> {review.rating}
                         </div>
                       </div>
 
-                      <div className="p-6 bg-slate-50/50 rounded-3xl border border-slate-100">
-                         <p className="text-slate-700 font-medium italic leading-relaxed">"{review.comment}"</p>
+                      <div className="p-8 bg-slate-50/50 rounded-[32px] border border-slate-100 relative group">
+                         <i className="fas fa-quote-left absolute top-4 left-4 text-slate-200 text-xl"></i>
+                         <p className="text-slate-700 font-medium italic leading-relaxed pl-4">"{review.comment}"</p>
                       </div>
 
                       {review.flags && review.flags.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                           {review.flags.map(flag => (
-                             <span key={flag} className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-full border border-rose-100 flex items-center gap-2">
-                               <i className="fas fa-triangle-exclamation text-[8px]"></i> {flag}
-                             </span>
-                           ))}
+                        <div className="space-y-2">
+                           <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Policy Violation Flags:</p>
+                           <div className="flex flex-wrap gap-2">
+                              {review.flags.map(flag => (
+                                <span key={flag} className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-lg border border-rose-100 flex items-center gap-2">
+                                  <i className="fas fa-triangle-exclamation text-[8px]"></i> {flag}
+                                </span>
+                              ))}
+                           </div>
                         </div>
                       )}
                     </div>
 
-                    <div className="md:w-64 shrink-0 flex flex-col justify-center gap-3">
-                      <div className="text-center mb-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
-                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border ${
+                    <div className="md:w-72 shrink-0 flex flex-col justify-center gap-3 pt-6 md:pt-0 border-t md:border-t-0 md:border-l border-slate-50 md:pl-8">
+                      <div className="text-center mb-4">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Protocol</p>
+                        <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase border inline-block ${
                           review.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                           review.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                           'bg-rose-50 text-rose-600 border-rose-100'
                         }`}>
-                          {review.status}
+                          {review.status === 'pending' ? 'Awaiting Moderation' : review.status}
                         </span>
                       </div>
+                      
                       {review.status === 'pending' && (
                         <>
                           <button 
                             onClick={() => handleModerateReview(review.id, 'approved')}
-                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
                           >
-                            Approve Publicly
+                            <i className="fas fa-check-double"></i> Whitelist Content
                           </button>
                           <button 
-                            onClick={() => handleModerateReview(review.id, 'rejected')}
-                            className="w-full py-4 bg-white border border-rose-100 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-all"
+                            onClick={() => handleFlagReview(review.id)}
+                            className="w-full py-4 bg-white border border-rose-100 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
                           >
-                            Reject & Archive
+                            <i className="fas fa-flag"></i> Flag Violation
                           </button>
                         </>
                       )}
+                      
                       {review.status !== 'pending' && (
                         <button 
                           onClick={() => setReviews(reviews.map(r => r.id === review.id ? { ...r, status: 'pending' } : r))}
-                          className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all"
+                          className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100"
                         >
-                          Reset to Pending
+                          Re-open Case
                         </button>
                       )}
+
+                      <div className="mt-4 pt-4 border-t border-slate-50">
+                        <p className="text-[9px] font-bold text-slate-300 text-center uppercase tracking-widest">Identity: {review.id.toUpperCase()}</p>
+                      </div>
                     </div>
                   </div>
                 );
               })}
-              {reviews.length === 0 && (
-                <div className="text-center py-20 bg-white rounded-[40px] border border-slate-100">
-                   <p className="text-slate-400 font-bold">No reviews found in the moderation queue.</p>
+              {filteredReviews.length === 0 && (
+                <div className="text-center py-24 bg-white rounded-[48px] border-2 border-dashed border-slate-100">
+                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+                      <i className="fas fa-inbox text-3xl"></i>
+                   </div>
+                   <h3 className="font-black text-2xl text-slate-900 mb-2">Queue Cleared</h3>
+                   <p className="text-slate-400 font-medium">No reviews matching the current filter criteria.</p>
                 </div>
               )}
            </div>
@@ -969,6 +1087,147 @@ export const SuperAdminDashboard: React.FC = () => {
                </div>
              ))}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'finance' && (
+        <div className="space-y-10 animate-fade-up">
+           <div className="grid lg:grid-cols-3 gap-8">
+              {[
+                { label: 'Platform Processed (GTV)', value: 'Rp 4.82B', icon: 'fa-vault', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                { label: 'Revenue Net (Commission)', value: 'Rp 542M', icon: 'fa-piggy-bank', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { label: 'Unsettled Liability', value: 'Rp 82.4M', icon: 'fa-money-bill-transfer', color: 'text-amber-600', bg: 'bg-amber-50' },
+              ].map((kpi, i) => (
+                <div key={i} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-6 ${kpi.bg} ${kpi.color}`}>
+                    <i className={`fas ${kpi.icon} text-lg`}></i>
+                  </div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
+                  <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{kpi.value}</h3>
+                </div>
+              ))}
+           </div>
+
+           <div className="grid lg:grid-cols-3 gap-10">
+              <div className="lg:col-span-2 space-y-10">
+                 <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+                       <h3 className="font-black text-xl text-slate-900 tracking-tight">Financial Ledger</h3>
+                       <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">View All Records</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                       <table className="w-full text-left">
+                          <thead>
+                             <tr className="bg-slate-50/50 text-slate-400 text-[9px] font-black uppercase tracking-widest">
+                                <th className="px-8 py-5">TXID</th>
+                                <th className="px-8 py-5">Category</th>
+                                <th className="px-8 py-5 text-right">Value</th>
+                                <th className="px-8 py-5">Status</th>
+                             </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                             {transactions.map(tx => (
+                               <tr key={tx.id} className="hover:bg-slate-50/50 transition-all">
+                                  <td className="px-8 py-6 font-bold text-slate-400 text-xs">{tx.id.toUpperCase()}</td>
+                                  <td className="px-8 py-6">
+                                     <p className="text-xs font-black text-slate-800 leading-none mb-1">{tx.type.replace('_', ' ').toUpperCase()}</p>
+                                     <p className="text-[10px] text-slate-400 font-medium">{tx.createdAt}</p>
+                                  </td>
+                                  <td className="px-8 py-6 text-right font-black text-slate-900 text-xs">Rp {tx.amount.toLocaleString()}</td>
+                                  <td className="px-8 py-6">
+                                     <span className={`px-2 py-1 rounded text-[8px] font-black uppercase border ${
+                                       tx.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                                     }`}>{tx.status}</span>
+                                  </td>
+                               </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
+                 </div>
+
+                 <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="p-8 border-b border-slate-50 bg-amber-50/30">
+                       <h3 className="font-black text-xl text-slate-900 tracking-tight">Payout Queue</h3>
+                    </div>
+                    <div className="p-8 space-y-6">
+                       {payoutRequests.map(req => (
+                         <div key={req.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-[32px] border border-slate-100">
+                            <div>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Entity: {req.id}</p>
+                               <h4 className="font-black text-slate-900">{req.businessName}</h4>
+                               <p className="text-sm font-black text-indigo-600 mt-1">Rp {req.amount.toLocaleString()}</p>
+                            </div>
+                            <div className="flex gap-3">
+                               {req.status === 'pending' ? (
+                                 <>
+                                   <button onClick={() => handleApprovePayout(req.id)} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">Settle</button>
+                                   <button className="px-6 py-3 bg-white border border-slate-200 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-rose-600 transition-all">Audit</button>
+                                 </>
+                               ) : (
+                                 <span className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100">Disbursed</span>
+                               )}
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+              </div>
+
+              <div className="space-y-8">
+                 <div className="bg-slate-950 p-10 rounded-[48px] shadow-2xl text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                    <h3 className="font-black text-2xl tracking-tight mb-8 relative z-10">Gateway Hub</h3>
+                    <div className="space-y-6 relative z-10">
+                       <div className="p-6 bg-white/5 rounded-3xl border border-white/10 space-y-4">
+                          <div className="flex justify-between items-center">
+                             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Active Provider</span>
+                             <span className="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded uppercase">Live</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-900 font-black italic">S.</div>
+                             <div>
+                                <p className="font-black">Stripe Integration</p>
+                                <p className="text-[10px] text-slate-400">Merchant: SEULANGA_TREASURY</p>
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="p-6 bg-white/5 rounded-3xl border border-white/10 text-center">
+                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Webhook</p>
+                             <p className="text-xs font-black text-emerald-400">Connected</p>
+                          </div>
+                          <div className="p-6 bg-white/5 rounded-3xl border border-white/10 text-center">
+                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Settlement</p>
+                             <p className="text-xs font-black text-indigo-400">Daily T+2</p>
+                          </div>
+                       </div>
+
+                       <button className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Configure Keys</button>
+                    </div>
+                 </div>
+
+                 <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-6">
+                    <h4 className="font-black text-xl text-slate-900 tracking-tight">Platform Fees</h4>
+                    <div className="space-y-4">
+                       <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-slate-400">Default Service Fee</span>
+                          <span className="text-sm font-black text-slate-900">Rp 25.000</span>
+                       </div>
+                       <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-slate-400">Base Commission</span>
+                          <span className="text-sm font-black text-slate-900">12%</span>
+                       </div>
+                       <div className="flex justify-between items-center">
+                          <span className="text-sm font-bold text-slate-400">Tax Protocol</span>
+                          <span className="text-sm font-black text-slate-900">VAT 11% Included</span>
+                       </div>
+                    </div>
+                    <button className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all">Adjust Global Rates</button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
 
@@ -1048,6 +1307,17 @@ export const SuperAdminDashboard: React.FC = () => {
                  </tbody>
               </table>
            </div>
+        </div>
+      )}
+
+      {/* Placeholder for settings if needed */}
+      {activeTab === 'settings' && (
+        <div className="bg-white p-20 rounded-[40px] border border-slate-100 text-center animate-fade-up">
+           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-300">
+             <i className="fas fa-gear text-3xl"></i>
+           </div>
+           <h3 className="text-2xl font-black text-slate-900 mb-2">Global Settings Center</h3>
+           <p className="text-slate-500 font-medium">Configure platform-wide policies, legal terms, and system variables.</p>
         </div>
       )}
     </div>
