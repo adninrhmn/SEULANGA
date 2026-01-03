@@ -58,6 +58,7 @@ export interface User {
   verificationStatus?: VerificationStatus;
   phoneNumber?: string;
   wishlist?: string[];
+  permissions?: string[];
 }
 
 export type BusinessStatus = 'active' | 'pending' | 'suspended' | 'rejected' | 'info_requested';
@@ -79,9 +80,14 @@ export interface Business {
   serviceFee?: number;
   tags?: string[];
   registrationDate?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  socials?: {
+    instagram?: string;
+    website?: string;
+  };
 }
 
-// Added blockedDates and policies to support unit management in dashboard
 export interface Unit {
   id: string;
   businessId: string;
@@ -100,7 +106,6 @@ export interface Unit {
   };
 }
 
-// Added missing Booking interface
 export interface Booking {
   id: string;
   businessId: string;
@@ -111,28 +116,30 @@ export interface Booking {
   totalPrice: number;
   status: BookingStatus;
   createdAt: string;
-}
-
-// Added missing AdCampaign interface
-export interface AdCampaign {
-  id: string;
-  businessId: string;
-  type: 'featured' | 'priority_search';
-  startDate: string;
-  endDate: string;
-  status: 'active' | 'expired' | 'pending';
-  budget: number;
+  paymentProof?: string;
+  notes?: string;
 }
 
 export interface Transaction {
   id: string;
-  type: 'subscription' | 'commission' | 'ad_fee' | 'service_fee';
+  type: 'subscription' | 'commission' | 'ad_fee' | 'service_fee' | 'payout';
   amount: number;
   status: 'pending' | 'completed' | 'failed';
   businessId?: string;
   guestId?: string;
   description: string;
   createdAt: string;
+}
+
+export interface Promotion {
+  id: string;
+  businessId: string;
+  code: string;
+  discountValue: number;
+  type: 'percentage' | 'fixed';
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
 }
 
 export interface AuditLog {
@@ -156,4 +163,5 @@ export interface Review {
   status: 'pending' | 'approved' | 'rejected';
   flags?: string[];
   createdAt: string;
+  response?: string;
 }

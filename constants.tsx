@@ -1,5 +1,5 @@
 
-import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AdCampaign, AuditLog, VerificationStatus, AppNotification, Review } from './types';
+import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AuditLog, VerificationStatus, AppNotification, Review, Promotion } from './types';
 
 export const APP_NAME = "SEULANGA";
 
@@ -52,64 +52,17 @@ export const TRANSLATIONS = {
   }
 };
 
+export const MOCK_PROMOTIONS: Promotion[] = [
+  { id: 'promo1', businessId: 'b1', code: 'NEWYEAR2024', discountValue: 15, type: 'percentage', startDate: '2024-01-01', endDate: '2024-01-31', isActive: true },
+  { id: 'promo2', businessId: 'b1', code: 'GRANDOPEN', discountValue: 50000, type: 'fixed', startDate: '2023-12-01', endDate: '2024-02-28', isActive: true },
+];
+
 export const MOCK_USERS: User[] = [
   { id: 'u1', name: 'Zian Ali', email: 'admin@seulanga.com', role: UserRole.SUPER_ADMIN, avatar: 'https://i.pravatar.cc/150?u=u1', createdAt: '2024-01-01' },
   { id: 'u2', name: 'John Doe', email: 'john@hotel.com', role: UserRole.BUSINESS_OWNER, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u2', createdAt: '2024-01-05' },
-  { id: 'u3', name: 'Sarah Staff', email: 'sarah@hotel.com', role: UserRole.ADMIN_STAFF, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u3', createdAt: '2024-02-10' },
-  { 
-    id: 'u4', 
-    name: 'Alice Guest', 
-    email: 'alice@gmail.com', 
-    role: UserRole.GUEST, 
-    avatar: 'https://i.pravatar.cc/150?u=u4', 
-    createdAt: '2024-03-01',
-    verificationStatus: VerificationStatus.VERIFIED,
-    phoneNumber: '+62 812 3456 7890',
-    wishlist: ['b1', 'b3']
-  },
-  { id: 'u5', name: 'Budi Santoso', email: 'budi@reception.com', role: UserRole.ADMIN_STAFF, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u15', createdAt: '2024-04-12' },
-];
-
-export const MOCK_REVIEWS: Review[] = [
-  {
-    id: 'rv1',
-    businessId: 'b1',
-    guestId: 'u4',
-    guestName: 'Alice Guest',
-    rating: 5,
-    comment: 'The stay was absolutely fantastic. The rooftop pool is incredible!',
-    status: 'pending',
-    createdAt: '2024-12-27'
-  },
-  {
-    id: 'rv2',
-    businessId: 'b2',
-    guestId: 'u4',
-    guestName: 'Alice Guest',
-    rating: 2,
-    comment: 'Service was very slow and the room was a bit dusty. Very disappointed.',
-    status: 'pending',
-    flags: ['Negative Sentiment'],
-    createdAt: '2024-12-26'
-  },
-  {
-    id: 'rv3',
-    businessId: 'b1',
-    guestId: 'u5',
-    guestName: 'Budi Santoso',
-    rating: 1,
-    comment: 'I hate this place! Worst experience ever! SCAM!',
-    status: 'pending',
-    flags: ['Aggressive Language', 'Potential Fraud Flag'],
-    createdAt: '2024-12-25'
-  }
-];
-
-export const MOCK_NOTIFICATIONS: AppNotification[] = [
-  { id: 'not1', title: 'Reservasi Baru!', message: 'Alice Guest baru saja memesan Deluxe Suite 201.', type: 'booking', isRead: false, createdAt: '2 min ago' },
-  { id: 'not2', title: 'Pembayaran Diterima', message: 'Invoice #INV-9022 senilai Rp 3.000.000 telah lunas.', type: 'payment', isRead: false, createdAt: '15 min ago' },
-  { id: 'not3', title: 'Update Sistem', message: 'Fitur AI Insights sekarang tersedia di dashboard Anda.', type: 'system', isRead: true, createdAt: '2 hours ago' },
-  { id: 'not4', title: 'Pesan Baru', message: 'Anda memiliki pesan baru dari Manajemen Seulanga.', type: 'message', isRead: true, createdAt: '1 day ago' },
+  { id: 'u3', name: 'Sarah Staff', email: 'sarah@hotel.com', role: UserRole.ADMIN_STAFF, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u3', createdAt: '2024-02-10', permissions: ['manage_bookings', 'view_revenue'] },
+  { id: 'u4', name: 'Alice Guest', email: 'alice@gmail.com', role: UserRole.GUEST, avatar: 'https://i.pravatar.cc/150?u=u4', createdAt: '2024-03-01', verificationStatus: VerificationStatus.VERIFIED, phoneNumber: '+62 812 3456 7890', wishlist: ['b1', 'b3'] },
+  { id: 'u5', name: 'Budi Santoso', email: 'budi@reception.com', role: UserRole.ADMIN_STAFF, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u15', createdAt: '2024-04-12', permissions: ['manage_bookings'] },
 ];
 
 export const MOCK_BUSINESSES: Business[] = [
@@ -127,7 +80,10 @@ export const MOCK_BUSINESSES: Business[] = [
     location: { lat: 5.5483, lng: 95.3238 },
     commissionRate: 10,
     serviceFee: 25000,
-    tags: ['Luxury', 'Business', 'City Center']
+    tags: ['Luxury', 'Business', 'City Center'],
+    contactEmail: 'contact@grandseulanga.com',
+    contactPhone: '+62 812 7777 9999',
+    socials: { instagram: '@grandseulangahotel', website: 'https://grandseulanga.com' }
   },
   {
     id: 'b2',
@@ -144,38 +100,6 @@ export const MOCK_BUSINESSES: Business[] = [
     commissionRate: 12,
     serviceFee: 15000,
     tags: ['Nature', 'Family', 'Quiet']
-  },
-  {
-    id: 'b3',
-    name: 'Syariah Boarding House',
-    category: BusinessCategory.KOST,
-    ownerId: 'u6',
-    description: 'Modern, secure, and affordable boarding house for students and professionals.',
-    address: 'Jl. Syiah Kuala, Banda Aceh',
-    status: 'active',
-    subscription: SubscriptionPlan.BASIC,
-    images: ['https://images.unsplash.com/photo-1555854817-5b2260d1bd04?q=80&w=2070'],
-    rating: 4.2,
-    location: { lat: 5.5700, lng: 95.3400 },
-    commissionRate: 5,
-    serviceFee: 10000,
-    tags: ['Student', 'Affordable', 'Strategic']
-  },
-  {
-    id: 'b4',
-    name: 'Seulanga Residence Phase 1',
-    category: BusinessCategory.SALES,
-    ownerId: 'u7',
-    description: 'Exclusive housing complex with minimalist modern design and green environment.',
-    address: 'Ulee Kareng, Banda Aceh',
-    status: 'active',
-    subscription: SubscriptionPlan.PREMIUM,
-    images: ['https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=2070'],
-    rating: 4.9,
-    location: { lat: 5.5300, lng: 95.3600 },
-    commissionRate: 2,
-    serviceFee: 0,
-    tags: ['Investment', 'Modern', 'Secure']
   }
 ];
 
@@ -189,7 +113,9 @@ export const MOCK_UNITS: Unit[] = [
     capacity: 2,
     available: true,
     amenities: ['WiFi', 'AC', 'Breakfast', 'Pool Access'],
-    images: ['https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=2070']
+    images: ['https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=2070'],
+    description: 'Spacious deluxe suite with king size bed and city view.',
+    policies: { cancellation: 'Flexible', checkIn: 'Standard ID Required' }
   },
   {
     id: 'un2',
@@ -198,31 +124,10 @@ export const MOCK_UNITS: Unit[] = [
     type: 'Room',
     price: 2500000,
     capacity: 2,
-    available: false,
+    available: true,
     amenities: ['WiFi', 'AC', 'Mini Bar', 'City View'],
-    images: ['https://images.unsplash.com/photo-1590490360182-c33d57733427?q=80&w=2070']
-  },
-  {
-    id: 'un_kost1',
-    businessId: 'b3',
-    name: 'Standard Room - Male',
-    type: 'Kost Room',
-    price: 1200000,
-    capacity: 1,
-    available: true,
-    amenities: ['WiFi', 'AC', 'Laundry'],
-    images: ['https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=2071']
-  },
-  {
-    id: 'un_house1',
-    businessId: 'b4',
-    name: 'Type 45/90 - Unit A1',
-    type: 'House',
-    price: 650000000,
-    capacity: 4,
-    available: true,
-    amenities: ['Garden', 'Carport', '2 Bedrooms'],
-    images: ['https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=2070']
+    images: ['https://images.unsplash.com/photo-1590490360182-c33d57733427?q=80&w=2070'],
+    description: 'Premium executive room on high floor.'
   }
 ];
 
@@ -236,34 +141,35 @@ export const MOCK_BOOKINGS: Booking[] = [
     checkOut: '2024-12-26',
     totalPrice: 3000000,
     status: BookingStatus.CONFIRMED,
-    createdAt: '2024-12-20'
+    createdAt: '2024-12-20',
+    notes: 'Guest requested early check-in'
   },
   {
-    id: 'bk_past',
+    id: 'bk2',
     businessId: 'b1',
-    unitId: 'un1',
-    guestId: 'u4',
-    checkIn: '2024-05-10',
-    checkOut: '2024-05-12',
-    totalPrice: 3000000,
-    status: BookingStatus.COMPLETED,
-    createdAt: '2024-05-01'
+    unitId: 'un2',
+    guestId: 'u5',
+    checkIn: '2024-12-28',
+    checkOut: '2024-12-30',
+    totalPrice: 5000000,
+    status: BookingStatus.PENDING,
+    createdAt: '2024-12-25'
   }
 ];
 
 export const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx1', type: 'subscription', amount: 1200000, status: 'completed', businessId: 'b1', description: 'Enterprise Premium Subscription', createdAt: '2024-10-01' },
   { id: 'tx2', type: 'commission', amount: 150000, status: 'completed', businessId: 'b1', guestId: 'u4', description: 'Commission for #BK1', createdAt: '2024-12-20' },
-  { id: 'tx3', type: 'service_fee', amount: 25000, status: 'completed', businessId: 'b1', guestId: 'u4', description: 'Platform Service Fee for #BK1', createdAt: '2024-12-20' },
-];
-
-export const MOCK_ADS: AdCampaign[] = [
-  { id: 'ad1', businessId: 'b1', type: 'featured', startDate: '2024-12-01', endDate: '2025-01-01', status: 'active', budget: 5000000 },
-  { id: 'ad2', businessId: 'b2', type: 'priority_search', startDate: '2024-12-15', endDate: '2025-01-15', status: 'active', budget: 2000000 },
 ];
 
 export const MOCK_AUDIT_LOGS: AuditLog[] = [
-  { id: 'log1', actorId: 'u1', actorName: 'Zian Ali', actorRole: UserRole.SUPER_ADMIN, action: 'Updated Subscription Tier', target: 'Enterprise Premium', type: 'financial', timestamp: '2024-10-25 10:15:00' },
-  { id: 'log2', actorId: 'u1', actorName: 'Zian Ali', actorRole: UserRole.SUPER_ADMIN, action: 'Approved Business', target: 'Grand Seulanga Hotel', type: 'management', timestamp: '2024-10-25 11:30:00' },
-  { id: 'log3', actorId: 'u2', actorName: 'John Doe', actorRole: UserRole.BUSINESS_OWNER, action: 'Modified Unit Pricing', target: 'Deluxe Suite 201', type: 'management', timestamp: '2024-10-25 12:45:00' },
+  { id: 'log1', actorId: 'u2', actorName: 'John Doe', actorRole: UserRole.BUSINESS_OWNER, action: 'Updated Unit Pricing', target: 'Deluxe Suite 201', type: 'management', timestamp: '2024-10-25 12:45:00' },
+];
+
+export const MOCK_REVIEWS: Review[] = [
+  { id: 'rv1', businessId: 'b1', guestId: 'u4', guestName: 'Alice Guest', rating: 5, comment: 'Amazing stay!', status: 'approved', createdAt: '2024-12-27' },
+];
+
+export const MOCK_NOTIFICATIONS: AppNotification[] = [
+  { id: 'not1', title: 'New Reservation', message: 'Alice Guest booked Deluxe Suite 201', type: 'booking', isRead: false, createdAt: '2 min ago' },
 ];
