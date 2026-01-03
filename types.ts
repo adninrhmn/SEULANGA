@@ -58,6 +58,21 @@ export enum UnitStatus {
   BLOCKED = 'Blocked'
 }
 
+export interface SEOMetadata {
+  title: string;
+  description: string;
+  keywords: string[];
+}
+
+export interface HomepageBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  isActive: boolean;
+  order: number;
+}
+
 export interface Inquiry {
   id: string;
   guestId: string;
@@ -113,6 +128,8 @@ export interface Business {
   address: string;
   status: BusinessStatus;
   subscription: SubscriptionPlan;
+  subscriptionExpiry?: string;
+  isTrial?: boolean;
   logo?: string;
   images: string[];
   rating: number;
@@ -123,6 +140,8 @@ export interface Business {
   registrationDate?: string;
   contactEmail?: string;
   contactPhone?: string;
+  isFeaturedRequested?: boolean;
+  isFeatured?: boolean;
   socials?: {
     instagram?: string;
     website?: string;
