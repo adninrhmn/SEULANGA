@@ -1,0 +1,7 @@
+{
+  "name": "SEULANGA - Integrated Property & Hospitality Platform",
+  "description": "An enterprise-grade, multi-tenant SaaS platform for hospitality and property management, featuring RBAC, comprehensive dashboards, and AI-driven business insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
