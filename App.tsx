@@ -50,7 +50,6 @@ const App: React.FC = () => {
     if (view === 'super-admin' && subView) {
       setAdminSubView(subView);
     } else if (view === 'super-admin' && !subView) {
-      // Default subview if none provided
       setAdminSubView('overview');
     }
   };
@@ -85,7 +84,7 @@ const App: React.FC = () => {
       case 'owner-dash':
         return <OwnerDashboard />;
       case 'super-admin':
-        return <SuperAdminDashboard activeTab={adminSubView as any} />;
+        return <SuperAdminDashboard activeTab={adminSubView as any} onNavigate={handleNavigate} />;
       case 'staff-dash':
         return <StaffDashboard />;
       case 'guest-dash':
