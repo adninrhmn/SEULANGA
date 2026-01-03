@@ -57,7 +57,7 @@ export interface User {
   createdAt: string;
   verificationStatus?: VerificationStatus;
   phoneNumber?: string;
-  wishlist?: string[]; // Array of Business IDs
+  wishlist?: string[];
 }
 
 export type BusinessStatus = 'active' | 'pending' | 'suspended' | 'rejected' | 'info_requested';
@@ -81,6 +81,7 @@ export interface Business {
   registrationDate?: string;
 }
 
+// Added blockedDates and policies to support unit management in dashboard
 export interface Unit {
   id: string;
   businessId: string;
@@ -92,12 +93,35 @@ export interface Unit {
   amenities: string[];
   images: string[];
   description?: string;
-  blockedDates?: string[]; // ISO format YYYY-MM-DD
+  blockedDates?: string[];
   policies?: {
     cancellation: string;
     checkIn: string;
-    other?: string;
   };
+}
+
+// Added missing Booking interface
+export interface Booking {
+  id: string;
+  businessId: string;
+  unitId: string;
+  guestId: string;
+  checkIn: string;
+  checkOut: string;
+  totalPrice: number;
+  status: BookingStatus;
+  createdAt: string;
+}
+
+// Added missing AdCampaign interface
+export interface AdCampaign {
+  id: string;
+  businessId: string;
+  type: 'featured' | 'priority_search';
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'expired' | 'pending';
+  budget: number;
 }
 
 export interface Transaction {
@@ -108,41 +132,6 @@ export interface Transaction {
   businessId?: string;
   guestId?: string;
   description: string;
-  createdAt: string;
-}
-
-export interface AdCampaign {
-  id: string;
-  businessId: string;
-  propertyId?: string;
-  type: 'featured' | 'banner' | 'priority_search';
-  startDate: string;
-  endDate: string;
-  status: 'active' | 'ended' | 'scheduled';
-  budget: number;
-}
-
-export interface Booking {
-  id: string;
-  businessId: string;
-  unitId: string;
-  guestId: string;
-  checkIn: string;
-  checkOut: string;
-  totalPrice: number;
-  status: BookingStatus;
-  paymentProof?: string;
-  createdAt: string;
-  notes?: string;
-}
-
-export interface Inquiry {
-  id: string;
-  businessId: string;
-  guestId: string;
-  subject: string;
-  message: string;
-  status: 'open' | 'resolved' | 'closed';
   createdAt: string;
 }
 
