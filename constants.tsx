@@ -1,7 +1,16 @@
 
-import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AuditLog, VerificationStatus, AppNotification, Review, Promotion, UnitStatus, MaintenanceTicket } from './types';
+import { UserRole, BusinessCategory, SystemModule, CategoryModuleConfig, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AuditLog, VerificationStatus, AppNotification, Review, Promotion, UnitStatus, MaintenanceTicket } from './types';
 
 export const APP_NAME = "SEULANGA";
+
+export const DEFAULT_CATEGORY_MODULE_MAP: CategoryModuleConfig = {
+  [BusinessCategory.HOTEL]: [SystemModule.BOOKING, SystemModule.PAYMENT, SystemModule.REVIEWS, SystemModule.MAINTENANCE, SystemModule.MARKETING, SystemModule.INVENTORY, SystemModule.FINANCE, SystemModule.TEAM],
+  [BusinessCategory.HOMESTAY]: [SystemModule.BOOKING, SystemModule.PAYMENT, SystemModule.REVIEWS, SystemModule.MAINTENANCE, SystemModule.MARKETING, SystemModule.INVENTORY],
+  [BusinessCategory.KOST]: [SystemModule.BOOKING, SystemModule.PAYMENT, SystemModule.MAINTENANCE, SystemModule.INVENTORY, SystemModule.FINANCE],
+  [BusinessCategory.RENTAL]: [SystemModule.BOOKING, SystemModule.PAYMENT, SystemModule.MAINTENANCE, SystemModule.INVENTORY],
+  [BusinessCategory.SALES]: [SystemModule.MARKETING, SystemModule.INVENTORY, SystemModule.TEAM],
+  [BusinessCategory.HOUSING_COMPLEX]: [SystemModule.MAINTENANCE, SystemModule.INVENTORY, SystemModule.TEAM],
+};
 
 export const TRANSLATIONS = {
   id: {

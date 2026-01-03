@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
-import { User, UserRole, Business } from './types';
+import { User, UserRole, Business, CategoryModuleConfig } from './types';
 import { LandingPage } from './views/LandingPage';
 import { OwnerDashboard } from './views/OwnerDashboard';
 import { SuperAdminDashboard } from './views/SuperAdminDashboard';
@@ -9,7 +9,8 @@ import { StaffDashboard } from './views/StaffDashboard';
 import { GuestDashboard } from './views/GuestDashboard';
 import { PropertyDetail } from './views/PropertyDetail';
 import { Marketplace } from './views/Marketplace';
-import { MOCK_USERS } from './constants';
+import { Auth } from './views/Auth';
+import { MOCK_USERS, DEFAULT_CATEGORY_MODULE_MAP } from './constants';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -18,10 +19,15 @@ const App: React.FC = () => {
   const [selectedProperty, setSelectedProperty] = useState<Business | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [language, setLanguage] = useState<'id' | 'en'>('id');
+  
+  // Shared state for category module mapping
+  const [moduleConfigs, setModuleConfigs] = useState<CategoryModuleConfig>(DEFAULT_CATEGORY_MODULE_MAP);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('seulanga_lang') as 'id' | 'en';
     if (savedLang) setLanguage(savedLang);
+    
+    // In a real app, we'd load saved moduleConfigs from an API
     
     setTimeout(() => {
       setIsLoading(false);
@@ -33,19 +39,26 @@ const App: React.FC = () => {
     localStorage.setItem('seulanga_lang', lang);
   };
 
-  const handleLogin = (role: UserRole) => {
-    const user = MOCK_USERS.find(u => u.role === role);
-    if (user) {
-      setCurrentUser(user);
-      if (role === UserRole.BUSINESS_OWNER) setCurrentView('owner-dash');
-      else if (role === UserRole.SUPER_ADMIN) {
-        setCurrentView('super-admin');
-        setAdminSubView('overview');
-      }
-      else if (role === UserRole.ADMIN_STAFF) setCurrentView('staff-dash');
-      else if (role === UserRole.GUEST) setCurrentView('guest-dash');
-      else setCurrentView('landing');
+  const handleLogin = (role: UserRole, email?: string) => {
+    const user = MOCK_USERS.find(u => u.role === role) || {
+      id: `u-gen-${Date.now()}`,
+      name: email?.split('@')[0] || 'Authenticated User',
+      email: email || 'user@example.com',
+      role: role,
+      avatar: 'https://i.pravatar.cc/150?u=newuser',
+      createdAt: new Date().toISOString(),
+    };
+
+    setCurrentUser(user as User);
+    
+    if (role === UserRole.BUSINESS_OWNER) setCurrentView('owner-dash');
+    else if (role === UserRole.SUPER_ADMIN) {
+      setCurrentView('super-admin');
+      setAdminSubView('overview');
     }
+    else if (role === UserRole.ADMIN_STAFF) setCurrentView('staff-dash');
+    else if (role === UserRole.GUEST) setCurrentView('guest-dash');
+    else setCurrentView('landing');
   };
 
   const handleLogout = () => {
@@ -90,9 +103,22 @@ const App: React.FC = () => {
       case 'landing':
         return <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
       case 'owner-dash':
-        return <OwnerDashboard />;
+        return currentUser?.businessId ? (
+          <OwnerDashboard 
+            businessId={currentUser.businessId} 
+            moduleConfigs={moduleConfigs} 
+          />
+        ) : <OwnerDashboard businessId="b1" moduleConfigs={moduleConfigs} />;
       case 'super-admin':
-        return <SuperAdminDashboard activeTab={adminSubView as any} onNavigate={handleNavigate} language={language} />;
+        return (
+          <SuperAdminDashboard 
+            activeTab={adminSubView as any} 
+            onNavigate={handleNavigate} 
+            language={language}
+            moduleConfigs={moduleConfigs}
+            onUpdateModuleConfigs={setModuleConfigs}
+          />
+        );
       case 'staff-dash':
         return <StaffDashboard />;
       case 'guest-dash':
@@ -102,39 +128,8 @@ const App: React.FC = () => {
       case 'explore':
         return <Marketplace onSelectProperty={navigateToProperty} />;
       case 'login':
-        return (
-          <div className="max-w-xl mx-auto py-20 px-6">
-            <div className="text-center mb-16">
-              <div className="w-20 h-20 bg-indigo-600 rounded-[28px] flex items-center justify-center text-white mx-auto shadow-2xl shadow-indigo-200 rotate-6 mb-8">
-                 <i className="fas fa-layer-group text-3xl"></i>
-              </div>
-              <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">Enter the Portal<span className="text-indigo-600">.</span></h2>
-              <p className="text-slate-500 font-medium">Select your professional identity to begin.</p>
-            </div>
-            <div className="grid gap-4">
-              {[
-                { role: UserRole.BUSINESS_OWNER, label: 'Enterprise Partner', desc: 'Complete property control & scaling tools', icon: 'fa-hotel', color: 'bg-indigo-600' },
-                { role: UserRole.ADMIN_STAFF, label: 'Operations Team', desc: 'Front-desk tools for staff & receptionists', icon: 'fa-clipboard-user', color: 'bg-violet-600' },
-                { role: UserRole.GUEST, label: 'Premium Guest', desc: 'Luxury stays & verified property rentals', icon: 'fa-star', color: 'bg-emerald-600' },
-                { role: UserRole.SUPER_ADMIN, label: 'System Governor', desc: 'Platform-wide oversight & policy control', icon: 'fa-shield-halved', color: 'bg-slate-950' }
-              ].map((persona) => (
-                <button 
-                  key={persona.role}
-                  onClick={() => handleLogin(persona.role)}
-                  className="group relative flex items-center p-8 bg-white border border-slate-200 rounded-[32px] hover:border-indigo-600 hover:shadow-2xl transition-all duration-300 text-left overflow-hidden"
-                >
-                  <div className={`w-16 h-16 ${persona.color} rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg mr-8 group-hover:rotate-6 transition-transform`}>
-                    <i className={`fas ${persona.icon}`}></i>
-                  </div>
-                  <div>
-                    <h4 className="font-black text-xl text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors">{persona.label}</h4>
-                    <p className="text-slate-500 text-sm font-medium">{persona.desc}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
+      case 'register':
+        return <Auth onLogin={handleLogin} onNavigateLanding={() => handleNavigate('landing')} />;
       default:
         return <LandingPage onNavigate={handleNavigate} onSelectProperty={navigateToProperty} />;
     }

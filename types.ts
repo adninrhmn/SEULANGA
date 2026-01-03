@@ -15,6 +15,19 @@ export enum BusinessCategory {
   HOUSING_COMPLEX = 'Housing Complex'
 }
 
+export enum SystemModule {
+  BOOKING = 'Booking',
+  PAYMENT = 'Payment',
+  REVIEWS = 'Reviews',
+  MAINTENANCE = 'Maintenance',
+  MARKETING = 'Marketing',
+  INVENTORY = 'Inventory',
+  FINANCE = 'Finance',
+  TEAM = 'Team'
+}
+
+export type CategoryModuleConfig = Record<BusinessCategory, SystemModule[]>;
+
 export enum SubscriptionPlan {
   BASIC = 'Basic',
   PRO = 'Pro',
