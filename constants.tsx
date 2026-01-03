@@ -1,5 +1,5 @@
 
-import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AuditLog, VerificationStatus, AppNotification, Review, Promotion } from './types';
+import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AuditLog, VerificationStatus, AppNotification, Review, Promotion, UnitStatus, MaintenanceTicket } from './types';
 
 export const APP_NAME = "SEULANGA";
 
@@ -112,6 +112,7 @@ export const MOCK_UNITS: Unit[] = [
     price: 1500000,
     capacity: 2,
     available: true,
+    status: UnitStatus.READY,
     amenities: ['WiFi', 'AC', 'Breakfast', 'Pool Access'],
     images: ['https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=2070'],
     description: 'Spacious deluxe suite with king size bed and city view.',
@@ -124,11 +125,30 @@ export const MOCK_UNITS: Unit[] = [
     type: 'Room',
     price: 2500000,
     capacity: 2,
-    available: true,
+    available: false,
+    status: UnitStatus.MAINTENANCE,
     amenities: ['WiFi', 'AC', 'Mini Bar', 'City View'],
     images: ['https://images.unsplash.com/photo-1590490360182-c33d57733427?q=80&w=2070'],
     description: 'Premium executive room on high floor.'
+  },
+  {
+    id: 'un3',
+    businessId: 'b1',
+    name: 'Standard Twin 102',
+    type: 'Room',
+    price: 800000,
+    capacity: 2,
+    available: true,
+    status: UnitStatus.DIRTY,
+    amenities: ['WiFi', 'AC'],
+    images: ['https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?q=80&w=2070'],
+    description: 'Clean and simple standard room.'
   }
+];
+
+export const MOCK_MAINTENANCE: MaintenanceTicket[] = [
+  { id: 'm1', unitId: 'un2', issue: 'AC cooling unit failure', priority: 'high', status: 'open', reportedBy: 'u3', createdAt: '2024-12-25' },
+  { id: 'm2', unitId: 'un3', issue: 'Replace minibar lightbulb', priority: 'low', status: 'resolved', reportedBy: 'u5', createdAt: '2024-12-26' }
 ];
 
 export const MOCK_BOOKINGS: Booking[] = [
@@ -142,7 +162,8 @@ export const MOCK_BOOKINGS: Booking[] = [
     totalPrice: 3000000,
     status: BookingStatus.CONFIRMED,
     createdAt: '2024-12-20',
-    notes: 'Guest requested early check-in'
+    notes: 'Guest requested early check-in',
+    verifiedPayment: true
   },
   {
     id: 'bk2',

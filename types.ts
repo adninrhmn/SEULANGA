@@ -37,11 +37,39 @@ export enum VerificationStatus {
   REJECTED = 'Rejected'
 }
 
+export enum UnitStatus {
+  READY = 'Ready',
+  DIRTY = 'Dirty',
+  CLEANING = 'Cleaning',
+  MAINTENANCE = 'Maintenance',
+  BLOCKED = 'Blocked'
+}
+
+export interface Inquiry {
+  id: string;
+  guestId: string;
+  businessId: string;
+  type: 'rental' | 'purchase' | 'visit';
+  status: 'pending' | 'responded' | 'closed';
+  message: string;
+  createdAt: string;
+}
+
+export interface MaintenanceTicket {
+  id: string;
+  unitId: string;
+  issue: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'in_progress' | 'resolved';
+  reportedBy: string;
+  createdAt: string;
+}
+
 export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'booking' | 'system' | 'payment' | 'message';
+  type: 'booking' | 'system' | 'payment' | 'message' | 'maintenance';
   isRead: boolean;
   createdAt: string;
   targetRole?: UserRole;
@@ -96,6 +124,7 @@ export interface Unit {
   price: number;
   capacity: number;
   available: boolean;
+  status: UnitStatus;
   amenities: string[];
   images: string[];
   description?: string;
@@ -118,11 +147,12 @@ export interface Booking {
   createdAt: string;
   paymentProof?: string;
   notes?: string;
+  verifiedPayment?: boolean;
 }
 
 export interface Transaction {
   id: string;
-  type: 'subscription' | 'commission' | 'ad_fee' | 'service_fee' | 'payout';
+  type: 'subscription' | 'commission' | 'ad_fee' | 'service_fee' | 'payout' | 'booking_payment';
   amount: number;
   status: 'pending' | 'completed' | 'failed';
   businessId?: string;
@@ -149,7 +179,7 @@ export interface AuditLog {
   actorRole: UserRole;
   action: string;
   target: string;
-  type: 'security' | 'financial' | 'management' | 'system';
+  type: 'security' | 'financial' | 'management' | 'system' | 'operational';
   timestamp: string;
 }
 
