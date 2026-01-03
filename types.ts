@@ -37,6 +37,16 @@ export enum VerificationStatus {
   REJECTED = 'Rejected'
 }
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'booking' | 'system' | 'payment' | 'message';
+  isRead: boolean;
+  createdAt: string;
+  targetRole?: UserRole;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -50,6 +60,8 @@ export interface User {
   wishlist?: string[]; // Array of Business IDs
 }
 
+export type BusinessStatus = 'active' | 'pending' | 'suspended' | 'rejected' | 'info_requested';
+
 export interface Business {
   id: string;
   name: string;
@@ -57,7 +69,7 @@ export interface Business {
   ownerId: string;
   description: string;
   address: string;
-  status: 'active' | 'pending' | 'suspended';
+  status: BusinessStatus;
   subscription: SubscriptionPlan;
   logo?: string;
   images: string[];
@@ -66,6 +78,7 @@ export interface Business {
   commissionRate?: number;
   serviceFee?: number;
   tags?: string[];
+  registrationDate?: string;
 }
 
 export interface Unit {

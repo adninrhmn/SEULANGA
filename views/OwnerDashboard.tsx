@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MOCK_BUSINESSES, MOCK_BOOKINGS, MOCK_UNITS, MOCK_TRANSACTIONS, MOCK_USERS } from '../constants';
 import { getBusinessInsights } from '../services/geminiService';
-import { BookingStatus, UserRole, Unit, Business, User, BusinessCategory, Booking } from '../types';
+import { BookingStatus, UserRole, Unit, Business, User, BusinessCategory, Booking, VerificationStatus } from '../types';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer 
@@ -67,13 +67,39 @@ export const OwnerDashboard: React.FC = () => {
     setShowUnitModal(false);
   };
 
+  const handleAddTeamMember = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newMember: User = {
+      id: `u-staff-${Date.now()}`,
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      role: UserRole.ADMIN_STAFF,
+      businessId: business.id,
+      avatar: `https://i.pravatar.cc/150?u=${Date.now()}`,
+      createdAt: new Date().toISOString().split('T')[0],
+      verificationStatus: VerificationStatus.VERIFIED
+    };
+    setTeam([...team, newMember]);
+    setShowTeamModal(false);
+  };
+
   const handleUpdateBookingStatus = (id: string, status: BookingStatus) => {
     setBookings(bookings.map(b => b.id === id ? { ...b, status } : b));
     setSelectedBooking(null);
   };
 
   const toggleStaffStatus = (id: string) => {
-    setTeam(team.map(u => u.id === id ? { ...u, role: u.role === UserRole.GUEST ? UserRole.ADMIN_STAFF : UserRole.GUEST } : u));
+    // Logic: Jika ADMIN_STAFF maka ubah role ke GUEST (untuk simulasi suspend akses) atau sebaliknya
+    setTeam(team.map(u => {
+      if (u.id === id) {
+        return { 
+          ...u, 
+          role: u.role === UserRole.ADMIN_STAFF ? UserRole.GUEST : UserRole.ADMIN_STAFF 
+        };
+      }
+      return u;
+    }));
   };
 
   const renderOverview = () => (
@@ -290,7 +316,7 @@ export const OwnerDashboard: React.FC = () => {
                    </span>
                 </td>
                 <td className="px-10 py-8 text-right">
-                   <button onClick={() => setSelectedBooking(bk)} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all">
+                   <button onClick={() => setSelectedBooking(bk)} className="px-6 py-2.5 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all">
                       Manage
                    </button>
                 </td>
@@ -309,24 +335,34 @@ export const OwnerDashboard: React.FC = () => {
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">Ops Team Matrix</h2>
             <p className="text-slate-500 font-medium">Coordinate roles and access permissions.</p>
          </div>
-         <button onClick={() => setShowTeamModal(true)} className="bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm flex items-center gap-3">
+         <button onClick={() => setShowTeamModal(true)} className="bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm flex items-center gap-3 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">
             <i className="fas fa-user-plus"></i> Recruit Member
          </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {team.map(member => (
-          <div key={member.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm group">
+          <div key={member.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
             <div className="flex items-center gap-5 mb-8">
-               <img src={member.avatar} className="w-16 h-16 rounded-2xl object-cover" />
+               <img src={member.avatar} className="w-16 h-16 rounded-2xl object-cover ring-4 ring-slate-50" />
                <div>
                   <h4 className="font-black text-xl text-slate-900 mb-1">{member.name}</h4>
-                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${member.role === UserRole.ADMIN_STAFF ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    {member.role.replace('_', ' ')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${member.role === UserRole.ADMIN_STAFF ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                      {member.role === UserRole.ADMIN_STAFF ? 'Staff Active' : 'Suspended'}
+                    </span>
+                  </div>
                </div>
             </div>
+            <div className="space-y-3 mb-8">
+               <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                 <i className="fas fa-envelope text-indigo-400"></i> {member.email}
+               </p>
+               <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                 <i className="fas fa-calendar-alt text-indigo-400"></i> Joined {member.createdAt}
+               </p>
+            </div>
             <div className="flex gap-3">
-               <button onClick={() => toggleStaffStatus(member.id)} className={`flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${member.role === UserRole.ADMIN_STAFF ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+               <button onClick={() => toggleStaffStatus(member.id)} className={`flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${member.role === UserRole.ADMIN_STAFF ? 'bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'}`}>
                   {member.role === UserRole.ADMIN_STAFF ? 'Suspend Access' : 'Reactivate'}
                </button>
                <button className="flex-1 py-3.5 bg-white border border-slate-200 text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest hover:border-indigo-600 transition-all">Permissions</button>
@@ -371,6 +407,38 @@ export const OwnerDashboard: React.FC = () => {
         {activeModule === 'team' && renderTeam()}
         {activeModule === 'settings' && <div className="p-20 text-center font-black text-slate-300">Konfigurasi Identitas Bisnis menyusul pada update berikutnya.</div>}
       </main>
+
+      {/* Team Member Modal */}
+      {showTeamModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 space-y-8">
+            <div className="flex justify-between items-center">
+              <h3 className="text-3xl font-black text-slate-900">Recruit Staff</h3>
+              <button onClick={() => setShowTeamModal(false)} className="text-slate-400 hover:text-indigo-600"><i className="fas fa-times text-xl"></i></button>
+            </div>
+            <form onSubmit={handleAddTeamMember} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
+                <input name="name" required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" placeholder="Ex: Siti Aminah" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Address</label>
+                <input name="email" type="email" required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" placeholder="siti@business.com" />
+              </div>
+              <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4">
+                 <i className="fas fa-info-circle text-indigo-600 mt-1"></i>
+                 <p className="text-[10px] font-bold text-indigo-700 leading-relaxed uppercase tracking-wider">
+                   Staf yang ditambahkan akan memiliki akses 'Ops Desk' secara otomatis untuk mengelola reservasi harian.
+                 </p>
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setShowTeamModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs">Cancel</button>
+                <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-indigo-100">Confirm Recruit</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Unit Modal */}
       {showUnitModal && (

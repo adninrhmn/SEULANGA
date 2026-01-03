@@ -1,5 +1,5 @@
 
-import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AdCampaign, AuditLog, VerificationStatus } from './types';
+import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AdCampaign, AuditLog, VerificationStatus, AppNotification } from './types';
 
 export const APP_NAME = "SEULANGA";
 
@@ -19,6 +19,13 @@ export const MOCK_USERS: User[] = [
     wishlist: ['b1', 'b3']
   },
   { id: 'u5', name: 'Budi Santoso', email: 'budi@reception.com', role: UserRole.ADMIN_STAFF, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u15', createdAt: '2024-04-12' },
+];
+
+export const MOCK_NOTIFICATIONS: AppNotification[] = [
+  { id: 'not1', title: 'Reservasi Baru!', message: 'Alice Guest baru saja memesan Deluxe Suite 201.', type: 'booking', isRead: false, createdAt: '2 min ago' },
+  { id: 'not2', title: 'Pembayaran Diterima', message: 'Invoice #INV-9022 senilai Rp 3.000.000 telah lunas.', type: 'payment', isRead: false, createdAt: '15 min ago' },
+  { id: 'not3', title: 'Update Sistem', message: 'Fitur AI Insights sekarang tersedia di dashboard Anda.', type: 'system', isRead: true, createdAt: '2 hours ago' },
+  { id: 'not4', title: 'Pesan Baru', message: 'Anda memiliki pesan baru dari Manajemen Seulanga.', type: 'message', isRead: true, createdAt: '1 day ago' },
 ];
 
 export const MOCK_BUSINESSES: Business[] = [
@@ -160,14 +167,12 @@ export const MOCK_BOOKINGS: Booking[] = [
   }
 ];
 
-// Added missing MOCK_TRANSACTIONS
 export const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx1', type: 'subscription', amount: 1200000, status: 'completed', businessId: 'b1', description: 'Enterprise Premium Subscription', createdAt: '2024-10-01' },
   { id: 'tx2', type: 'commission', amount: 150000, status: 'completed', businessId: 'b1', guestId: 'u4', description: 'Commission for #BK1', createdAt: '2024-12-20' },
   { id: 'tx3', type: 'service_fee', amount: 25000, status: 'completed', businessId: 'b1', guestId: 'u4', description: 'Platform Service Fee for #BK1', createdAt: '2024-12-20' },
 ];
 
-// Added missing MOCK_ADS
 export const MOCK_ADS: AdCampaign[] = [
   { id: 'ad1', businessId: 'b1', type: 'featured', startDate: '2024-12-01', endDate: '2025-01-01', status: 'active', budget: 5000000 },
   { id: 'ad2', businessId: 'b2', type: 'priority_search', startDate: '2024-12-15', endDate: '2025-01-15', status: 'active', budget: 2000000 },

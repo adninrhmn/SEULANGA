@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { UserRole, User } from '../types';
-import { APP_NAME } from '../constants';
+import React, { useState, useRef, useEffect } from 'react';
+import { UserRole, User, AppNotification } from '../types';
+import { APP_NAME, MOCK_NOTIFICATIONS } from '../constants';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,6 +13,21 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavigate, currentView }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const navItems = [
     { label: 'Dashboard', icon: 'fa-grid-2', view: 'landing', roles: [UserRole.GUEST, null] },
@@ -26,6 +41,23 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
   const filteredNav = navItems.filter(item => 
     !item.roles.length || (user ? item.roles.includes(user.role) : item.roles.includes(null))
   );
+
+  const markAllRead = () => {
+    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(notifications.filter(n => n.id !== id));
+  };
+
+  const getNotificationIcon = (type: AppNotification['type']) => {
+    switch (type) {
+      case 'booking': return 'fa-calendar-check text-indigo-500 bg-indigo-50';
+      case 'payment': return 'fa-receipt text-emerald-500 bg-emerald-50';
+      case 'system': return 'fa-shield-halved text-amber-500 bg-amber-50';
+      default: return 'fa-envelope text-slate-500 bg-slate-50';
+    }
+  };
 
   return (
     <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
@@ -57,7 +89,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
                 }`}
               >
                 <div className={`${currentView === item.view ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
-                   <i className={`fas ${item.icon.replace('fa-', 'fa-')} text-lg w-6`}></i>
+                   <i className={`fas ${item.icon} text-lg w-6`}></i>
                 </div>
                 {isSidebarOpen && <span>{item.label}</span>}
               </button>
@@ -112,7 +144,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
                 placeholder="Find properties, bookings, or analytics..." 
                 className="bg-transparent border-none focus:outline-none text-sm w-full text-slate-700"
               />
-              <span className="text-[10px] font-bold text-slate-400 px-1.5 py-0.5 border border-slate-200 rounded-md bg-white">⌘K</span>
             </div>
           </div>
 
@@ -124,16 +155,84 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
               </div>
             ) : (
               <div className="flex items-center gap-3">
+                <div className="relative" ref={notificationRef}>
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className={`relative w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50 ${showNotifications ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100' : ''}`}
+                  >
+                    <i className="fas fa-bell"></i>
+                    {unreadCount > 0 && (
+                      <span className="absolute top-2.5 right-2.5 w-4 h-4 bg-rose-600 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm animate-pulse">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Notification Dropdown */}
+                  {showNotifications && (
+                    <div className="absolute right-0 mt-4 w-[420px] bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200 origin-top-right z-[100]">
+                      <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                         <div>
+                            <h4 className="font-black text-slate-900 uppercase tracking-tighter text-lg">Central Alerts</h4>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{unreadCount} New Protocol Updates</p>
+                         </div>
+                         <button 
+                           onClick={markAllRead}
+                           className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                         >
+                            Mark All Read
+                         </button>
+                      </div>
+                      <div className="max-h-[480px] overflow-y-auto scrollbar-hide">
+                         {notifications.length > 0 ? (
+                           notifications.map(notif => (
+                             <div key={notif.id} className={`p-6 border-b border-slate-50 flex gap-4 hover:bg-slate-50/50 transition-colors relative group ${!notif.isRead ? 'bg-indigo-50/20' : ''}`}>
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getNotificationIcon(notif.type)}`}>
+                                   <i className={`fas ${getNotificationIcon(notif.type).split(' ')[0]}`}></i>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                   <div className="flex items-center justify-between mb-1">
+                                      <h5 className="font-black text-slate-900 text-sm truncate">{notif.title}</h5>
+                                      <span className="text-[10px] font-bold text-slate-300 whitespace-nowrap">{notif.createdAt}</span>
+                                   </div>
+                                   <p className="text-xs text-slate-500 font-medium leading-relaxed">{notif.message}</p>
+                                </div>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); removeNotification(notif.id); }}
+                                  className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-300 hover:text-rose-500 shadow-sm border border-slate-100 transition-all"
+                                >
+                                   <i className="fas fa-trash-can text-xs"></i>
+                                </button>
+                                {!notif.isRead && (
+                                  <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-indigo-600 rounded-full shadow-sm"></div>
+                                )}
+                             </div>
+                           ))
+                         ) : (
+                           <div className="py-20 text-center space-y-4">
+                              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-200">
+                                 <i className="fas fa-bell-slash text-2xl"></i>
+                              </div>
+                              <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No notifications to relay.</p>
+                           </div>
+                         )}
+                      </div>
+                      <div className="p-4 bg-slate-50 text-center border-t border-slate-100">
+                         <button className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] hover:text-indigo-600 transition-colors">
+                            View All Ecosystem Activity
+                         </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center -space-x-2 mr-4 hidden md:flex">
                   {[1, 2, 3].map(i => (
                     <img key={i} src={`https://i.pravatar.cc/150?u=${i+10}`} className="w-8 h-8 rounded-full border-2 border-white" />
                   ))}
                   <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500">+12</div>
                 </div>
-                <button className="relative w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50">
-                  <i className="fas fa-bell"></i>
-                  <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-indigo-600 rounded-full border-2 border-white"></span>
-                </button>
+                
                 <button className="w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50">
                   <i className="fas fa-gear"></i>
                 </button>
