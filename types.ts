@@ -150,3 +150,15 @@ export interface AuditLog {
   type: 'security' | 'financial' | 'management' | 'system';
   timestamp: string;
 }
+
+export interface Review {
+  id: string;
+  businessId: string;
+  guestId: string;
+  guestName: string;
+  rating: number;
+  comment: string;
+  status: 'pending' | 'approved' | 'rejected';
+  flags?: string[];
+  createdAt: string;
+}

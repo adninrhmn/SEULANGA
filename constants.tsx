@@ -1,5 +1,5 @@
 
-import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AdCampaign, AuditLog, VerificationStatus, AppNotification } from './types';
+import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Booking, BookingStatus, Transaction, AdCampaign, AuditLog, VerificationStatus, AppNotification, Review } from './types';
 
 export const APP_NAME = "SEULANGA";
 
@@ -19,6 +19,41 @@ export const MOCK_USERS: User[] = [
     wishlist: ['b1', 'b3']
   },
   { id: 'u5', name: 'Budi Santoso', email: 'budi@reception.com', role: UserRole.ADMIN_STAFF, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u15', createdAt: '2024-04-12' },
+];
+
+export const MOCK_REVIEWS: Review[] = [
+  {
+    id: 'rv1',
+    businessId: 'b1',
+    guestId: 'u4',
+    guestName: 'Alice Guest',
+    rating: 5,
+    comment: 'The stay was absolutely fantastic. The rooftop pool is incredible!',
+    status: 'pending',
+    createdAt: '2024-12-27'
+  },
+  {
+    id: 'rv2',
+    businessId: 'b2',
+    guestId: 'u4',
+    guestName: 'Alice Guest',
+    rating: 2,
+    comment: 'Service was very slow and the room was a bit dusty. Very disappointed.',
+    status: 'pending',
+    flags: ['Negative Sentiment'],
+    createdAt: '2024-12-26'
+  },
+  {
+    id: 'rv3',
+    businessId: 'b1',
+    guestId: 'u5',
+    guestName: 'Budi Santoso',
+    rating: 1,
+    comment: 'I hate this place! Worst experience ever! SCAM!',
+    status: 'pending',
+    flags: ['Aggressive Language', 'Potential Fraud Flag'],
+    createdAt: '2024-12-25'
+  }
 ];
 
 export const MOCK_NOTIFICATIONS: AppNotification[] = [

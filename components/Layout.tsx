@@ -14,16 +14,25 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavigate, currentView }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showQuickAction, setShowQuickAction] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
+  
   const notificationRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const quickActionRef = useRef<HTMLDivElement>(null);
+  const langRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
+      const target = event.target as Node;
+      if (notificationRef.current && !notificationRef.current.contains(target)) setShowNotifications(false);
+      if (profileRef.current && !profileRef.current.contains(target)) setShowProfileMenu(false);
+      if (quickActionRef.current && !quickActionRef.current.contains(target)) setShowQuickAction(false);
+      if (langRef.current && !langRef.current.contains(target)) setShowLangMenu(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -42,14 +51,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
     !item.roles.length || (user ? item.roles.includes(user.role) : item.roles.includes(null))
   );
 
-  const markAllRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-  };
-
-  const removeNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-  };
-
   const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
       case 'booking': return 'fa-calendar-check text-indigo-500 bg-indigo-50';
@@ -63,10 +64,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
     <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
       {/* Sidebar */}
       {user && (
-        <aside className={`${isSidebarOpen ? 'w-72' : 'w-24'} bg-white border-r border-slate-200/60 transition-all duration-500 ease-in-out flex flex-col z-50`}>
+        <aside className={`${isSidebarOpen ? 'w-72' : 'w-24'} bg-white border-r border-slate-200/60 transition-all duration-500 ease-in-out flex flex-col z-50 shadow-sm`}>
           <div className="h-20 flex items-center px-8 border-b border-slate-100/80 shrink-0">
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 rotate-3 transition-transform hover:rotate-0">
+              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 rotate-3 transition-transform hover:rotate-0 cursor-pointer" onClick={() => onNavigate('landing')}>
                 <i className="fas fa-layer-group text-lg"></i>
               </div>
               {isSidebarOpen && (
@@ -96,26 +97,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
             ))}
           </nav>
 
-          <div className="p-6 m-4 bg-slate-50/50 rounded-2xl border border-slate-100">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="relative">
-                <img src={user.avatar} className="w-11 h-11 rounded-xl object-cover ring-2 ring-white shadow-md" />
-                <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm"></div>
-              </div>
-              {isSidebarOpen && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
-                  <p className="text-[10px] uppercase tracking-widest font-bold text-indigo-600/70">{user.role.replace('_', ' ')}</p>
-                </div>
-              )}
-            </div>
-            <button 
-              onClick={onLogout}
-              className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-            >
-              <i className="fas fa-arrow-right-from-bracket"></i>
-              {isSidebarOpen && <span>Sign Out</span>}
-            </button>
+          <div className="p-4 border-t border-slate-100">
+             <div className={`flex flex-col gap-2 ${!isSidebarOpen && 'items-center'}`}>
+                <button className="flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all">
+                   <i className="fas fa-circle-question text-lg w-6"></i>
+                   {isSidebarOpen && <span className="text-xs font-bold uppercase tracking-widest">Help Center</span>}
+                </button>
+             </div>
           </div>
         </aside>
       )}
@@ -125,7 +113,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
         <header className="h-20 bg-white/70 backdrop-blur-md border-b border-slate-200/50 flex items-center justify-between px-10 sticky top-0 z-40">
           <div className="flex items-center gap-6">
             {!user && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => onNavigate('landing')}>
                 <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md">
                    <i className="fas fa-layer-group"></i>
                 </div>
@@ -137,105 +125,152 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
                 <i className={`fas ${isSidebarOpen ? 'fa-bars-staggered' : 'fa-bars'} text-lg`}></i>
               </button>
             )}
-            <div className="hidden lg:flex items-center bg-slate-100/50 rounded-xl px-4 py-2 border border-slate-200/50 w-96 focus-within:ring-2 ring-indigo-100 transition-all">
-              <i className="fas fa-magnifying-glass text-slate-400 mr-3"></i>
+            
+            <div className="hidden lg:flex items-center bg-slate-100/50 rounded-xl px-4 py-2.5 border border-slate-200/50 w-80 xl:w-[450px] focus-within:ring-2 ring-indigo-100 transition-all group">
+              <i className="fas fa-magnifying-glass text-slate-400 mr-3 group-focus-within:text-indigo-600 transition-colors"></i>
               <input 
                 type="text" 
-                placeholder="Find properties, bookings, or analytics..." 
-                className="bg-transparent border-none focus:outline-none text-sm w-full text-slate-700"
+                placeholder="Search resources, bookings, or data..." 
+                className="bg-transparent border-none focus:outline-none text-sm w-full text-slate-700 font-medium"
               />
+              <span className="hidden xl:block text-[10px] font-black text-slate-300 bg-white px-2 py-1 rounded-md border border-slate-100 ml-2 uppercase tracking-tighter">⌘K</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
+            {/* Quick Actions (Owner/Staff Only) */}
+            {user && (user.role === UserRole.BUSINESS_OWNER || user.role === UserRole.ADMIN_STAFF) && (
+              <div className="relative" ref={quickActionRef}>
+                <button 
+                  onClick={() => setShowQuickAction(!showQuickAction)}
+                  className="w-11 h-11 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                >
+                  <i className={`fas ${showQuickAction ? 'fa-times' : 'fa-plus'} transition-transform duration-300`}></i>
+                </button>
+                {showQuickAction && (
+                  <div className="absolute right-0 mt-4 w-64 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200 origin-top-right z-50 p-2">
+                     <button className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 rounded-2xl transition-all group">
+                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all"><i className="fas fa-calendar-plus"></i></div>
+                        <span className="text-sm font-bold text-slate-700">New Reservation</span>
+                     </button>
+                     <button className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 rounded-2xl transition-all group">
+                        <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all"><i className="fas fa-door-open"></i></div>
+                        <span className="text-sm font-bold text-slate-700">Add Unit / Room</span>
+                     </button>
+                     <button className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 rounded-2xl transition-all group">
+                        <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all"><i className="fas fa-file-invoice-dollar"></i></div>
+                        <span className="text-sm font-bold text-slate-700">Generate Report</span>
+                     </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Language Switcher */}
+            <div className="relative" ref={langRef}>
+               <button 
+                onClick={() => setShowLangMenu(!showLangMenu)}
+                className="w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50"
+               >
+                 <span className="text-[10px] font-black uppercase tracking-widest">ID</span>
+               </button>
+               {showLangMenu && (
+                  <div className="absolute right-0 mt-4 w-40 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200 origin-top-right z-50 p-2">
+                     <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-left transition-all">
+                        <span className="w-6 h-4 bg-red-600 rounded-sm"></span>
+                        <span className="text-xs font-bold text-slate-700">Indonesia</span>
+                     </button>
+                     <button className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl text-left transition-all">
+                        <span className="w-6 h-4 bg-blue-600 rounded-sm"></span>
+                        <span className="text-xs font-bold text-slate-700">English (US)</span>
+                     </button>
+                  </div>
+               )}
+            </div>
+
+            {/* Notifications */}
+            {user && (
+              <div className="relative" ref={notificationRef}>
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className={`relative w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50 ${showNotifications ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100' : ''}`}
+                >
+                  <i className="fas fa-bell"></i>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-2.5 right-2.5 w-4 h-4 bg-rose-600 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-4 w-[420px] bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200 origin-top-right z-[100]">
+                    <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                       <div>
+                          <h4 className="font-black text-slate-900 uppercase tracking-tighter text-lg">Central Alerts</h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{unreadCount} New Protocol Updates</p>
+                       </div>
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto scrollbar-hide">
+                       {notifications.map(notif => (
+                         <div key={notif.id} className="p-5 border-b border-slate-50 flex gap-4 hover:bg-slate-50 transition-colors">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${getNotificationIcon(notif.type)}`}>
+                               <i className={`fas ${getNotificationIcon(notif.type).split(' ')[0]}`}></i>
+                            </div>
+                            <div className="min-w-0">
+                               <p className="font-bold text-slate-900 text-sm">{notif.title}</p>
+                               <p className="text-xs text-slate-500 truncate">{notif.message}</p>
+                               <p className="text-[10px] text-slate-300 font-bold mt-1 uppercase tracking-widest">{notif.createdAt}</p>
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {!user ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 ml-2">
                 <button onClick={() => onNavigate('login')} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-all">Log In</button>
-                <button onClick={() => onNavigate('register')} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-600 shadow-xl shadow-slate-200 transition-all">Get Started</button>
+                <button onClick={() => onNavigate('register')} className="bg-slate-950 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-indigo-600 shadow-xl shadow-slate-200 transition-all">Get Started</button>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
-                <div className="relative" ref={notificationRef}>
-                  <button 
-                    onClick={() => setShowNotifications(!showNotifications)}
-                    className={`relative w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50 ${showNotifications ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100' : ''}`}
-                  >
-                    <i className="fas fa-bell"></i>
-                    {unreadCount > 0 && (
-                      <span className="absolute top-2.5 right-2.5 w-4 h-4 bg-rose-600 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm animate-pulse">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Notification Dropdown */}
-                  {showNotifications && (
-                    <div className="absolute right-0 mt-4 w-[420px] bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200 origin-top-right z-[100]">
-                      <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                         <div>
-                            <h4 className="font-black text-slate-900 uppercase tracking-tighter text-lg">Central Alerts</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{unreadCount} New Protocol Updates</p>
-                         </div>
-                         <button 
-                           onClick={markAllRead}
-                           className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
-                         >
-                            Mark All Read
-                         </button>
-                      </div>
-                      <div className="max-h-[480px] overflow-y-auto scrollbar-hide">
-                         {notifications.length > 0 ? (
-                           notifications.map(notif => (
-                             <div key={notif.id} className={`p-6 border-b border-slate-50 flex gap-4 hover:bg-slate-50/50 transition-colors relative group ${!notif.isRead ? 'bg-indigo-50/20' : ''}`}>
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getNotificationIcon(notif.type)}`}>
-                                   <i className={`fas ${getNotificationIcon(notif.type).split(' ')[0]}`}></i>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                   <div className="flex items-center justify-between mb-1">
-                                      <h5 className="font-black text-slate-900 text-sm truncate">{notif.title}</h5>
-                                      <span className="text-[10px] font-bold text-slate-300 whitespace-nowrap">{notif.createdAt}</span>
-                                   </div>
-                                   <p className="text-xs text-slate-500 font-medium leading-relaxed">{notif.message}</p>
-                                </div>
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); removeNotification(notif.id); }}
-                                  className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 w-8 h-8 flex items-center justify-center bg-white rounded-lg text-slate-300 hover:text-rose-500 shadow-sm border border-slate-100 transition-all"
-                                >
-                                   <i className="fas fa-trash-can text-xs"></i>
-                                </button>
-                                {!notif.isRead && (
-                                  <div className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-indigo-600 rounded-full shadow-sm"></div>
-                                )}
-                             </div>
-                           ))
-                         ) : (
-                           <div className="py-20 text-center space-y-4">
-                              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-200">
-                                 <i className="fas fa-bell-slash text-2xl"></i>
-                              </div>
-                              <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No notifications to relay.</p>
-                           </div>
-                         )}
-                      </div>
-                      <div className="p-4 bg-slate-50 text-center border-t border-slate-100">
-                         <button className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] hover:text-indigo-600 transition-colors">
-                            View All Ecosystem Activity
-                         </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center -space-x-2 mr-4 hidden md:flex">
-                  {[1, 2, 3].map(i => (
-                    <img key={i} src={`https://i.pravatar.cc/150?u=${i+10}`} className="w-8 h-8 rounded-full border-2 border-white" />
-                  ))}
-                  <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500">+12</div>
-                </div>
-                
-                <button className="w-11 h-11 flex items-center justify-center bg-slate-50 text-slate-500 hover:text-indigo-600 rounded-xl transition-all border border-slate-200/50">
-                  <i className="fas fa-gear"></i>
+              <div className="relative ml-2" ref={profileRef}>
+                <button 
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center gap-3 p-1 pl-3 bg-white border border-slate-200/60 rounded-2xl hover:border-indigo-600 transition-all shadow-sm"
+                >
+                   <div className="hidden sm:block text-right">
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{user.name.split(' ')[0]}</p>
+                      <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest">{user.role.split('_')[0]}</p>
+                   </div>
+                   <img src={user.avatar} className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-50 shadow-md" />
                 </button>
+
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-4 w-64 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200 origin-top-right z-50">
+                    <div className="p-6 bg-slate-50/50 border-b border-slate-100">
+                       <p className="font-black text-slate-900 text-sm truncate">{user.name}</p>
+                       <p className="text-xs font-medium text-slate-400">{user.email}</p>
+                    </div>
+                    <div className="p-2">
+                       <button className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl text-slate-600 text-sm font-bold transition-all">
+                          <i className="fas fa-user-circle text-indigo-400"></i> My Profile
+                       </button>
+                       <button className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl text-slate-600 text-sm font-bold transition-all">
+                          <i className="fas fa-shield-halved text-indigo-400"></i> Account Security
+                       </button>
+                       <div className="my-2 border-t border-slate-50"></div>
+                       <button 
+                         onClick={onLogout}
+                         className="w-full flex items-center gap-3 p-4 hover:bg-rose-50 rounded-2xl text-rose-600 text-sm font-black transition-all"
+                       >
+                          <i className="fas fa-power-off"></i> Terminate Session
+                       </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -19,10 +19,10 @@ const revenueData = [
 
 export const OwnerDashboard: React.FC = () => {
   const [activeModule, setActiveModule] = useState<'overview' | 'inventory' | 'bookings' | 'finance' | 'team' | 'settings'>('overview');
-  const [insights, setInsights] = useState<string>('Menganalisis data pasar untuk properti Anda...');
+  const [insights, setInsights] = useState<string>('Analyzing market data for your properties...');
   const [activeChart, setActiveChart] = useState<'revenue' | 'occupancy'>('revenue');
   
-  // Local Data State (for interactivity)
+  // Local Data State
   const [business, setBusiness] = useState<Business>(MOCK_BUSINESSES[0]);
   const [units, setUnits] = useState<Unit[]>(MOCK_UNITS.filter(u => u.businessId === MOCK_BUSINESSES[0].id));
   const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS.filter(b => b.businessId === MOCK_BUSINESSES[0].id));
@@ -30,6 +30,7 @@ export const OwnerDashboard: React.FC = () => {
 
   // Modals State
   const [showUnitModal, setShowUnitModal] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
@@ -38,7 +39,7 @@ export const OwnerDashboard: React.FC = () => {
   }, [business.category]);
 
   const fetchInsights = async () => {
-    setInsights("Menghubungkan ke Gemini AI Engine...");
+    setInsights("Connecting to Gemini AI Engine...");
     const text = await getBusinessInsights({
       revenue: revenueData[revenueData.length-1].revenue,
       occupancy: `${revenueData[revenueData.length-1].occupancy}%`,
@@ -46,25 +47,39 @@ export const OwnerDashboard: React.FC = () => {
       category: business.category,
       name: business.name
     });
-    setInsights(text || "AI Insights saat ini tidak tersedia.");
+    setInsights(text || "AI Insights currently unavailable.");
   };
 
-  const handleAddUnit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveUnit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newUnit: Unit = {
-      id: `un-${Date.now()}`,
+    const unitData: Unit = {
+      id: editingUnit?.id || `un-${Date.now()}`,
       businessId: business.id,
       name: formData.get('name') as string,
       type: formData.get('type') as string,
       price: parseInt(formData.get('price') as string),
       capacity: parseInt(formData.get('capacity') as string),
-      available: true,
-      amenities: (formData.get('amenities') as string).split(','),
-      images: ['https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=2071']
+      available: editingUnit ? editingUnit.available : true,
+      amenities: (formData.get('amenities') as string).split(',').map(s => s.trim()),
+      images: editingUnit?.images || ['https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=2071'],
+      description: formData.get('description') as string
     };
-    setUnits([...units, newUnit]);
+
+    if (editingUnit) {
+      setUnits(units.map(u => u.id === editingUnit.id ? unitData : u));
+    } else {
+      setUnits([...units, unitData]);
+    }
+    
     setShowUnitModal(false);
+    setEditingUnit(null);
+  };
+
+  const handleDeleteUnit = (id: string) => {
+    if (window.confirm("Are you sure you want to permanently remove this unit? This action cannot be undone.")) {
+      setUnits(units.filter(u => u.id !== id));
+    }
   };
 
   const handleAddTeamMember = (e: React.FormEvent<HTMLFormElement>) => {
@@ -90,7 +105,6 @@ export const OwnerDashboard: React.FC = () => {
   };
 
   const toggleStaffStatus = (id: string) => {
-    // Logic: Jika ADMIN_STAFF maka ubah role ke GUEST (untuk simulasi suspend akses) atau sebaliknya
     setTeam(team.map(u => {
       if (u.id === id) {
         return { 
@@ -128,8 +142,8 @@ export const OwnerDashboard: React.FC = () => {
           <button onClick={fetchInsights} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-8 py-4 rounded-2xl font-black text-sm transition-all flex items-center gap-3">
             <i className="fas fa-sync"></i> Refresh Insights
           </button>
-          <button onClick={() => setShowUnitModal(true)} className="bg-slate-950 text-white px-10 py-4 rounded-2xl font-black text-sm hover:bg-indigo-600 shadow-xl shadow-slate-200 transition-all flex items-center gap-3">
-            <i className="fas fa-plus"></i> Add Unit
+          <button onClick={() => { setEditingUnit(null); setShowUnitModal(true); }} className="bg-slate-950 text-white px-10 py-4 rounded-2xl font-black text-sm hover:bg-indigo-600 shadow-xl shadow-slate-200 transition-all flex items-center gap-3">
+            <i className="fas fa-plus"></i> New Unit
           </button>
         </div>
       </div>
@@ -158,7 +172,7 @@ export const OwnerDashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-12">
             <div>
               <h3 className="font-black text-2xl text-slate-900 tracking-tight">Ecosystem Growth</h3>
-              <p className="text-slate-400 text-sm font-medium">Data performance real-time dari SEULANGA Engine</p>
+              <p className="text-slate-400 text-sm font-medium">Real-time performance data from SEULANGA Engine</p>
             </div>
             <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
               {['Revenue', 'Occupancy'].map(t => (
@@ -232,43 +246,80 @@ export const OwnerDashboard: React.FC = () => {
     <div className="space-y-8 animate-fade-up">
       <div className="flex items-center justify-between mb-4">
          <div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Asset Architect</h2>
-            <p className="text-slate-500 font-medium">Manage and refine your unit collections.</p>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Unit Management Matrix</h2>
+            <p className="text-slate-500 font-medium">Add, configure, or retire your property assets.</p>
          </div>
-         <button onClick={() => setShowUnitModal(true)} className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black text-sm flex items-center gap-3 hover:bg-indigo-600 transition-all">
-            <i className="fas fa-plus"></i> New Asset
+         <button onClick={() => { setEditingUnit(null); setShowUnitModal(true); }} className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black text-sm flex items-center gap-3 hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200">
+            <i className="fas fa-plus"></i> Architect New Asset
          </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
         {units.map(unit => (
-          <div key={unit.id} className="bg-white rounded-[40px] overflow-hidden border border-slate-100 hover:shadow-2xl transition-all group">
+          <div key={unit.id} className="bg-white rounded-[40px] overflow-hidden border border-slate-100 hover:shadow-2xl transition-all group flex flex-col h-full">
             <div className="h-64 relative overflow-hidden">
                <img src={unit.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                <div className="absolute top-6 left-6 flex gap-2">
                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border backdrop-blur-md ${unit.available ? 'bg-emerald-50/80 text-emerald-700 border-emerald-100' : 'bg-rose-50/80 text-rose-700 border-rose-100'}`}>
-                    {unit.available ? 'Available' : 'Occupied'}
+                    {unit.available ? 'Available' : 'Maintenance'}
                  </span>
                </div>
+               <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                 <button onClick={() => { setEditingUnit(unit); setShowUnitModal(true); }} className="w-10 h-10 bg-white text-slate-900 rounded-xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-lg">
+                   <i className="fas fa-edit"></i>
+                 </button>
+                 <button onClick={() => handleDeleteUnit(unit.id)} className="w-10 h-10 bg-white text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-lg">
+                   <i className="fas fa-trash-alt"></i>
+                 </button>
+               </div>
                <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
-                  <p className="text-white text-2xl font-black">Rp {unit.price.toLocaleString()}</p>
+                  <p className="text-white text-2xl font-black">Rp {unit.price.toLocaleString()}<span className="text-xs font-normal text-slate-300 ml-1">/ night</span></p>
                </div>
             </div>
-            <div className="p-8">
-              <h3 className="text-2xl font-black text-slate-900 mb-4">{unit.name}</h3>
+            <div className="p-8 flex flex-col flex-1">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 leading-tight">{unit.name}</h3>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{unit.type}</p>
+                </div>
+                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-lg">
+                   <i className="fas fa-users text-slate-400 text-xs"></i>
+                   <span className="text-xs font-black text-slate-600">{unit.capacity}</span>
+                </div>
+              </div>
+              
               <div className="flex flex-wrap gap-2 mb-6">
                  {unit.amenities.map(a => (
                    <span key={a} className="px-3 py-1 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-bold uppercase tracking-wider">{a}</span>
                  ))}
               </div>
-              <div className="flex gap-3">
-                 <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Edit</button>
-                 <button onClick={() => setUnits(units.map(u => u.id === unit.id ? {...u, available: !u.available} : u))} className={`flex-1 py-3 border border-slate-200 text-slate-900 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${unit.available ? 'hover:border-rose-600 hover:text-rose-600' : 'hover:border-emerald-600 hover:text-emerald-600'}`}>
-                    {unit.available ? 'Set Offline' : 'Set Online'}
+
+              <p className="text-sm text-slate-500 font-medium line-clamp-2 mb-8 flex-1">
+                {unit.description || "No description provided for this unit asset."}
+              </p>
+              
+              <div className="flex gap-3 mt-auto">
+                 <button 
+                  onClick={() => { setEditingUnit(unit); setShowUnitModal(true); }}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                 >
+                    Configure
+                 </button>
+                 <button onClick={() => setUnits(units.map(u => u.id === unit.id ? {...u, available: !u.available} : u))} className={`flex-1 py-3 border border-slate-200 text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${unit.available ? 'hover:border-rose-600 hover:text-rose-600' : 'hover:border-emerald-600 hover:text-emerald-600'}`}>
+                    {unit.available ? 'Go Offline' : 'Activate'}
                  </button>
               </div>
             </div>
           </div>
         ))}
+        {units.length === 0 && (
+          <div className="col-span-full py-32 bg-white rounded-[48px] border-2 border-dashed border-slate-100 flex flex-col items-center text-center">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 text-slate-300">
+               <i className="fas fa-boxes-stacked text-3xl"></i>
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-2">Inventory Void</h3>
+            <p className="text-slate-500 font-medium max-w-sm">No units found for this property. Click the button above to begin architecting your first asset.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -376,18 +427,18 @@ export const OwnerDashboard: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[#f8fafc]">
       <div className="px-10 py-6 border-b border-slate-200/50 bg-white/30 backdrop-blur-md sticky top-0 z-30">
-         <div className="flex items-center gap-4 max-w-fit mx-auto">
+         <div className="flex items-center gap-4 max-w-fit mx-auto overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Dashboard', icon: 'fa-chess-king' },
-              { id: 'inventory', label: 'Assets', icon: 'fa-door-open' },
-              { id: 'bookings', label: 'Ledger', icon: 'fa-book-open' },
-              { id: 'team', label: 'Team', icon: 'fa-users-gear' },
-              { id: 'settings', label: 'Settings', icon: 'fa-sliders' }
+              { id: 'inventory', label: 'Unit Management', icon: 'fa-door-open' },
+              { id: 'bookings', label: 'Stay Ledger', icon: 'fa-book-open' },
+              { id: 'team', label: 'Ops Matrix', icon: 'fa-users-gear' },
+              { id: 'settings', label: 'Identity', icon: 'fa-sliders' }
             ].map(mod => (
               <button 
                 key={mod.id}
                 onClick={() => setActiveModule(mod.id as any)}
-                className={`flex items-center gap-3 px-8 py-4 rounded-2xl text-sm font-black transition-all ${
+                className={`flex items-center gap-3 px-8 py-4 rounded-2xl text-sm font-black transition-all whitespace-nowrap ${
                   activeModule === mod.id 
                   ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-100' 
                   : 'text-slate-500 hover:bg-white hover:text-slate-900 border border-transparent'
@@ -405,7 +456,7 @@ export const OwnerDashboard: React.FC = () => {
         {activeModule === 'inventory' && renderInventory()}
         {activeModule === 'bookings' && renderBookings()}
         {activeModule === 'team' && renderTeam()}
-        {activeModule === 'settings' && <div className="p-20 text-center font-black text-slate-300">Konfigurasi Identitas Bisnis menyusul pada update berikutnya.</div>}
+        {activeModule === 'settings' && <div className="p-20 text-center font-black text-slate-300">Property Configuration Portal coming in the next security patch.</div>}
       </main>
 
       {/* Team Member Modal */}
@@ -428,7 +479,7 @@ export const OwnerDashboard: React.FC = () => {
               <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4">
                  <i className="fas fa-info-circle text-indigo-600 mt-1"></i>
                  <p className="text-[10px] font-bold text-indigo-700 leading-relaxed uppercase tracking-wider">
-                   Staf yang ditambahkan akan memiliki akses 'Ops Desk' secara otomatis untuk mengelola reservasi harian.
+                   Staff added will automatically receive access to the 'Ops Desk' to manage daily reservations.
                  </p>
               </div>
               <div className="flex gap-4 pt-4">
@@ -440,33 +491,69 @@ export const OwnerDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Unit Modal */}
+      {/* Unit Modal (Combined Add/Edit) */}
       {showUnitModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 space-y-8">
-            <h3 className="text-3xl font-black text-slate-900">New Asset Creation</h3>
-            <form onSubmit={handleAddUnit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit Name</label>
-                <input name="name" required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" placeholder="Ex: Deluxe Sea View" />
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden border border-white">
+            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+              <h3 className="text-3xl font-black text-slate-900 tracking-tighter">
+                {editingUnit ? 'Refine Asset Strategy' : 'Architect New Asset'}
+              </h3>
+              <button onClick={() => { setShowUnitModal(false); setEditingUnit(null); }} className="text-slate-400 hover:text-indigo-600 transition-all"><i className="fas fa-times text-xl"></i></button>
+            </div>
+            <form onSubmit={handleSaveUnit} className="p-10 space-y-8 max-h-[70vh] overflow-y-auto scrollbar-hide">
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Unit Designation</label>
+                  <input name="name" defaultValue={editingUnit?.name} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50" placeholder="Ex: Deluxe Sea View #204" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Asset Type</label>
+                  <select name="type" defaultValue={editingUnit?.type || 'Room'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none focus:ring-4 ring-indigo-50">
+                    <option value="Room">Standard Room</option>
+                    <option value="Suite">Premium Suite</option>
+                    <option value="House">Residential Unit</option>
+                    <option value="Villa">Private Villa</option>
+                    <option value="Apartment">Service Apartment</option>
+                  </select>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-6">
+
+              <div className="grid grid-cols-2 gap-8">
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Price / Night</label>
-                    <input name="price" type="number" required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="1500000" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pricing Strategy (IDR / Night)</label>
+                    <input name="price" type="number" defaultValue={editingUnit?.price} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="1500000" />
                  </div>
                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Capacity</label>
-                    <input name="capacity" type="number" required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="2" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operational Capacity (Pax)</label>
+                    <input name="capacity" type="number" defaultValue={editingUnit?.capacity} required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="2" />
                  </div>
               </div>
+
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amenities (Comma Separated)</label>
-                <input name="amenities" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="WiFi, AC, Breakfast" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amenities Matrix (Comma Separated)</label>
+                <input name="amenities" defaultValue={editingUnit?.amenities.join(', ')} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="WiFi, AC, Rooftop Access, Minibar" />
               </div>
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setShowUnitModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-indigo-100">Architect Asset</button>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technical Description</label>
+                <textarea name="description" defaultValue={editingUnit?.description} rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none resize-none" placeholder="Describe the layout and key features of this specific unit..." />
+              </div>
+
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
+                 <i className="fas fa-camera text-slate-400 text-xl"></i>
+                 <div className="flex-1">
+                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Image Gallery Protocol</p>
+                    <p className="text-xs text-slate-400 font-medium">High-resolution assets (min 1920x1080) are required for marketplace visibility.</p>
+                 </div>
+                 <button type="button" className="px-5 py-2.5 bg-white border border-slate-200 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-600 transition-all">Upload Assets</button>
+              </div>
+
+              <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2">
+                <button type="button" onClick={() => { setShowUnitModal(false); setEditingUnit(null); }} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase text-xs tracking-widest">Abort</button>
+                <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">
+                  {editingUnit ? 'Finalize Re-Strategy' : 'Deploy Asset'}
+                </button>
               </div>
             </form>
           </div>

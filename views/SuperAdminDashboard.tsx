@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_ADS, MOCK_AUDIT_LOGS, MOCK_USERS } from '../constants';
-import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus } from '../types';
+import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_ADS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS } from '../constants';
+import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const revenueData = [
@@ -32,6 +32,8 @@ interface SubPlan {
   id: string;
   name: string;
   price: string;
+  billingCycle: 'Monthly' | 'Annually';
+  trialPeriodDays: number;
   commission: string;
   maxUnits: number;
   features: string[];
@@ -39,13 +41,13 @@ interface SubPlan {
 }
 
 const INITIAL_PLANS: SubPlan[] = [
-  { id: 'p1', name: 'Basic Access', price: 'Free', commission: '15%', maxUnits: 5, features: ['Community Support', 'Standard Marketplace Listing', 'Basic Analytics'], status: 'active' },
-  { id: 'p2', name: 'Growth Professional', price: 'Rp 499.000', commission: '10%', maxUnits: 50, features: ['Priority Support', 'Featured Search Results', 'Advanced Analytics', 'Commission Discount'], status: 'active' },
-  { id: 'p3', name: 'Enterprise Premium', price: 'Rp 1.200.000', commission: '5%', maxUnits: 999, features: ['24/7 Dedicated Support', 'Homepage Featured Ad', 'AI Business Insights', 'Custom Reports', 'API Access'], status: 'active' },
+  { id: 'p1', name: 'Basic Access', price: 'Free', billingCycle: 'Monthly', trialPeriodDays: 0, commission: '15%', maxUnits: 5, features: ['Community Support', 'Standard Marketplace Listing', 'Basic Analytics'], status: 'active' },
+  { id: 'p2', name: 'Growth Professional', price: 'Rp 499.000', billingCycle: 'Monthly', trialPeriodDays: 14, commission: '10%', maxUnits: 50, features: ['Priority Support', 'Featured Search Results', 'Advanced Analytics', 'Commission Discount'], status: 'active' },
+  { id: 'p3', name: 'Enterprise Premium', price: 'Rp 1.200.000', billingCycle: 'Monthly', trialPeriodDays: 30, commission: '5%', maxUnits: 999, features: ['24/7 Dedicated Support', 'Homepage Featured Ad', 'AI Business Insights', 'Custom Reports', 'API Access'], status: 'active' },
 ];
 
 export const SuperAdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'monetization' | 'tenants' | 'finance' | 'ads' | 'logs' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'ads' | 'logs' | 'settings'>('tenants');
   const [isBackupRunning, setIsBackupRunning] = useState(false);
   const [plans, setPlans] = useState<SubPlan[]>(INITIAL_PLANS);
   const [editingPlan, setEditingPlan] = useState<SubPlan | null>(null);
@@ -59,6 +61,9 @@ export const SuperAdminDashboard: React.FC = () => {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
+
+  // Review Moderation State
+  const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
   
   // Tenant Specific Filters
   const [tenantFilters, setTenantFilters] = useState({
@@ -69,6 +74,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   
   // Platform Settings State
   const [platformSettings, setPlatformSettings] = useState({
@@ -107,6 +113,8 @@ export const SuperAdminDashboard: React.FC = () => {
       id: editingPlan?.id || `p${Date.now()}`,
       name: planName,
       price: formData.get('price') as string,
+      billingCycle: formData.get('billingCycle') as 'Monthly' | 'Annually',
+      trialPeriodDays: parseInt(formData.get('trialPeriodDays') as string) || 0,
       commission: formData.get('commission') as string,
       maxUnits: parseInt(formData.get('maxUnits') as string),
       features: (formData.get('features') as string).split(',').map(s => s.trim()),
@@ -124,15 +132,31 @@ export const SuperAdminDashboard: React.FC = () => {
     setEditingPlan(null);
   };
 
+  const handleDeletePlan = (id: string) => {
+    const plan = plans.find(p => p.id === id);
+    if (plan && confirm(`Are you sure you want to archive the ${plan.name} plan?`)) {
+      setPlans(plans.filter(p => p.id !== id));
+      addLog('Archived Subscription Plan', plan.name, 'financial');
+    }
+  };
+
+  const handleModerateReview = (id: string, status: 'approved' | 'rejected') => {
+    const review = reviews.find(r => r.id === id);
+    if (review) {
+      setReviews(reviews.map(r => r.id === id ? { ...r, status } : r));
+      addLog(`Review Moderation: ${status.toUpperCase()}`, `Review ID: ${id} for ${MOCK_BUSINESSES.find(b => b.id === review.businessId)?.name}`, 'management');
+    }
+  };
+
   const updateBusinessStatus = (id: string, status: BusinessStatus) => {
     const biz = businesses.find(b => b.id === id);
     setBusinesses(businesses.map(b => b.id === id ? { ...b, status } : b));
     if (biz) {
         let actionLabel = 'Updated Status';
-        if (status === 'active') actionLabel = 'Approved Business';
-        else if (status === 'rejected') actionLabel = 'Rejected Registration';
-        else if (status === 'info_requested') actionLabel = 'Requested More Information';
-        else if (status === 'suspended') actionLabel = 'Suspended Business';
+        if (status === 'active') actionLabel = 'Approved Business Registration';
+        else if (status === 'rejected') actionLabel = 'Rejected Business Registration';
+        else if (status === 'info_requested') actionLabel = 'Requested Additional Business Info';
+        else if (status === 'suspended') actionLabel = 'Suspended Business Account';
         
         addLog(actionLabel, biz.name, 'management');
     }
@@ -141,11 +165,29 @@ export const SuperAdminDashboard: React.FC = () => {
   };
 
   const handleBulkApprovePending = () => {
-    const pendingIds = businesses.filter(b => b.status === 'pending').map(b => b.id);
-    if (pendingIds.length === 0) return;
+    const pendingBusinesses = businesses.filter(b => b.status === 'pending');
+    if (pendingBusinesses.length === 0) return;
     
     setBusinesses(businesses.map(b => b.status === 'pending' ? { ...b, status: 'active' } : b));
-    addLog('Bulk Approved Pending Businesses', `${pendingIds.length} entities`, 'management');
+    addLog('Bulk Approved Pending Businesses', `${pendingBusinesses.length} entities`, 'management');
+    setSelectedBusinessIds([]);
+  };
+
+  const handleBulkSuspendSelected = () => {
+    if (selectedBusinessIds.length === 0) return;
+    if (!confirm(`Are you sure you want to suspend ${selectedBusinessIds.length} selected businesses?`)) return;
+
+    setBusinesses(businesses.map(b => selectedBusinessIds.includes(b.id) ? { ...b, status: 'suspended' } : b));
+    addLog('Bulk Suspended Businesses', `${selectedBusinessIds.length} entities`, 'management');
+    setSelectedBusinessIds([]);
+  };
+
+  const handleBulkRejectSelected = () => {
+    if (selectedBusinessIds.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently reject ${selectedBusinessIds.length} selected registrations?`)) return;
+
+    setBusinesses(businesses.map(b => selectedBusinessIds.includes(b.id) ? { ...b, status: 'rejected' } : b));
+    addLog('Bulk Rejected Registrations', `${selectedBusinessIds.length} entities`, 'management');
     setSelectedBusinessIds([]);
   };
 
@@ -167,32 +209,32 @@ export const SuperAdminDashboard: React.FC = () => {
     switch (status) {
       case 'active':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full border border-emerald-100 shadow-sm">
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full border border-emerald-100 shadow-sm whitespace-nowrap">
             <i className="fas fa-check-circle text-[8px]"></i> Approved
           </span>
         );
       case 'rejected':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-full border border-rose-100 shadow-sm">
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-full border border-rose-100 shadow-sm whitespace-nowrap">
             <i className="fas fa-times-circle text-[8px]"></i> Rejected
           </span>
         );
       case 'suspended':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black uppercase rounded-full border border-slate-200 shadow-sm">
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black uppercase rounded-full border border-slate-200 shadow-sm whitespace-nowrap">
             <i className="fas fa-ban text-[8px]"></i> Suspended
           </span>
         );
       case 'info_requested':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase rounded-full border border-indigo-100 shadow-sm">
-            <i className="fas fa-question-circle text-[8px]"></i> Pending Info Request
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase rounded-full border border-indigo-100 shadow-sm whitespace-nowrap">
+            <i className="fas fa-question-circle text-[8px]"></i> Info Requested
           </span>
         );
       case 'pending':
       default:
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black uppercase rounded-full border border-amber-100 shadow-sm">
+          <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black uppercase rounded-full border border-amber-100 shadow-sm whitespace-nowrap">
             <i className="fas fa-clock text-[8px]"></i> Pending Review
           </span>
         );
@@ -210,9 +252,50 @@ export const SuperAdminDashboard: React.FC = () => {
     });
   }, [businesses, tenantFilters]);
 
+  // Audit Logs Export Logic
+  const handleExportJSON = () => {
+    const dataStr = JSON.stringify(auditLogs, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `seulanga_audit_logs_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    addLog('Exported Audit Logs', 'JSON Format', 'system');
+    setShowExportDropdown(false);
+  };
+
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Timestamp', 'Actor', 'Role', 'Action', 'Target', 'Type'];
+    const rows = auditLogs.map(log => [
+      log.id,
+      log.timestamp,
+      log.actorName,
+      log.actorRole,
+      log.action,
+      log.target,
+      log.type
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const dataBlob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `seulanga_audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    addLog('Exported Audit Logs', 'CSV Format', 'system');
+    setShowExportDropdown(false);
+  };
+
   const renderAnalytics = () => (
     <div className="space-y-10 animate-fade-up">
-      {/* Analytics KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Total Businesses', value: businesses.length, trend: '+8.5%', icon: 'fa-building-circle-check', color: 'text-indigo-600', bg: 'bg-indigo-50' },
@@ -234,7 +317,6 @@ export const SuperAdminDashboard: React.FC = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
-        {/* MRR Trends Chart */}
         <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -264,7 +346,6 @@ export const SuperAdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* User Growth Chart */}
         <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -289,70 +370,6 @@ export const SuperAdminDashboard: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
-
-        {/* Subscription Tier Distribution */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="font-black text-xl text-slate-900 tracking-tight">Subscription Tier Matrix</h3>
-              <p className="text-slate-400 text-xs font-medium">Active plan distribution across the platform.</p>
-            </div>
-            <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-              <i className="fas fa-crown"></i>
-            </div>
-          </div>
-          <div className="h-[300px] flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={subDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={100}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {subDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{borderRadius: '20px', border: 'none'}} />
-                <Legend iconType="circle" layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{fontSize: '10px', fontWeight: 'bold'}} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Category Share */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="font-black text-xl text-slate-900 tracking-tight">Business Category Share</h3>
-              <p className="text-slate-400 text-xs font-medium">Percentage of businesses by industry type.</p>
-            </div>
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-              <i className="fas fa-tags"></i>
-            </div>
-          </div>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
-                { name: 'Hotel', count: 42 },
-                { name: 'Homestay', count: 28 },
-                { name: 'Kost', count: 54 },
-                { name: 'Rental', count: 12 },
-                { name: 'Sales', count: 8 },
-              ]}>
-                <CartesianGrid strokeDasharray="5 5" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} dy={10} />
-                <YAxis hide />
-                <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '20px', border: 'none'}} />
-                <Bar dataKey="count" fill="#6366f1" radius={[10, 10, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -374,8 +391,19 @@ export const SuperAdminDashboard: React.FC = () => {
                   <input name="name" defaultValue={editingPlan?.name} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:ring-2 ring-indigo-100" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pricing Display</label>
-                  <input name="price" defaultValue={editingPlan?.price} placeholder="Rp 500k/mo" required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:ring-2 ring-indigo-100" />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Base Price</label>
+                  <input name="price" defaultValue={editingPlan?.price} placeholder="Rp 500.000" required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:ring-2 ring-indigo-100" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Billing Cycle</label>
+                  <select name="billingCycle" defaultValue={editingPlan?.billingCycle || 'Monthly'} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:ring-2 ring-indigo-100">
+                    <option value="Monthly">Monthly</option>
+                    <option value="Annually">Annually</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Trial Period (Days)</label>
+                  <input name="trialPeriodDays" type="number" defaultValue={editingPlan?.trialPeriodDays || 0} required className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:ring-2 ring-indigo-100" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Platform Commission</label>
@@ -396,6 +424,89 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Business Review/Verification Modal */}
+      {isReviewModalOpen && selectedBusiness && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border border-white flex flex-col md:flex-row h-[80vh]">
+              <div className="md:w-1/2 bg-slate-50 border-r border-slate-100 flex flex-col">
+                <div className="h-64 relative overflow-hidden">
+                   <img src={selectedBusiness.images[0]} className="w-full h-full object-cover" />
+                   <div className="absolute top-6 left-6">
+                      {renderStatusBadge(selectedBusiness.status)}
+                   </div>
+                </div>
+                <div className="p-8 space-y-6 overflow-y-auto flex-1 scrollbar-hide">
+                   <div>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Entity Description</h4>
+                      <p className="text-sm font-medium text-slate-700 leading-relaxed">{selectedBusiness.description}</p>
+                   </div>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-white rounded-2xl border border-slate-100">
+                         <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Category</p>
+                         <p className="text-xs font-bold text-slate-900">{selectedBusiness.category}</p>
+                      </div>
+                      <div className="p-4 bg-white rounded-2xl border border-slate-100">
+                         <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Subscription</p>
+                         <p className="text-xs font-bold text-slate-900">{selectedBusiness.subscription}</p>
+                      </div>
+                   </div>
+                   <div>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Official Address</h4>
+                      <p className="text-xs font-bold text-slate-800">{selectedBusiness.address}</p>
+                   </div>
+                </div>
+              </div>
+
+              <div className="md:w-1/2 p-10 flex flex-col">
+                 <div className="flex justify-between items-start mb-10">
+                    <div>
+                       <h3 className="text-2xl font-black text-slate-900 tracking-tight">Governance Review</h3>
+                       <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Verification Workflow: {selectedBusiness.name}</p>
+                    </div>
+                    <button onClick={() => setReviewModalOpen(false)} className="text-slate-300 hover:text-rose-500 transition-all"><i className="fas fa-times text-xl"></i></button>
+                 </div>
+
+                 <div className="space-y-4 mb-auto">
+                    <p className="text-xs font-bold text-slate-500 leading-relaxed">
+                       Review the business entity documents and physical address verification. You can approve for live access, reject based on policy, or request further technical clarification from the business owner.
+                    </p>
+                    
+                    <div className="space-y-3">
+                       <button 
+                         onClick={() => updateBusinessStatus(selectedBusiness.id, 'active')}
+                         className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-3"
+                       >
+                          <i className="fas fa-check-double"></i> Finalize Approval
+                       </button>
+                       <button 
+                         onClick={() => updateBusinessStatus(selectedBusiness.id, 'info_requested')}
+                         className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center justify-center gap-3"
+                       >
+                          <i className="fas fa-file-signature"></i> Request Technical Info
+                       </button>
+                    </div>
+                 </div>
+
+                 <div className="pt-8 border-t border-slate-50 space-y-3">
+                    <h4 className="text-[10px] font-black text-rose-400 uppercase tracking-widest text-center mb-2">Policy Enforcement</h4>
+                    <button 
+                      onClick={() => updateBusinessStatus(selectedBusiness.id, 'suspended')}
+                      className="w-full py-4 bg-white border border-slate-200 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-rose-500 hover:text-rose-500 transition-all flex items-center justify-center gap-3"
+                    >
+                       <i className="fas fa-ban"></i> Suspend Account
+                    </button>
+                    <button 
+                      onClick={() => updateBusinessStatus(selectedBusiness.id, 'rejected')}
+                      className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-100 transition-all flex items-center justify-center gap-3"
+                    >
+                       <i className="fas fa-times-circle"></i> Permanent Reject
+                    </button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
 
@@ -452,8 +563,9 @@ export const SuperAdminDashboard: React.FC = () => {
         {[
           { id: 'overview', label: 'Ecosystem Intelligence', icon: 'fa-brain' },
           { id: 'analytics', label: 'Platform Analytics', icon: 'fa-chart-pie' },
-          { id: 'monetization', label: 'Subscription Tiers', icon: 'fa-sack-dollar' },
+          { id: 'monetization', label: 'Subscription Plans', icon: 'fa-sack-dollar' },
           { id: 'tenants', label: 'Tenant Onboarding', icon: 'fa-id-badge' },
+          { id: 'reviews', label: 'Review Moderation', icon: 'fa-star-half-stroke' },
           { id: 'finance', label: 'Payouts & Flows', icon: 'fa-receipt' },
           { id: 'logs', label: 'System Audit Logs', icon: 'fa-clock-rotate-left' },
           { id: 'settings', label: 'Platform Settings', icon: 'fa-gear' }
@@ -524,10 +636,9 @@ export const SuperAdminDashboard: React.FC = () => {
 
       {activeTab === 'tenants' && (
         <div className="space-y-8 animate-fade-up">
-          {/* Tenant Onboarding Filtering Panel */}
           <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
             <div className="flex items-center justify-between">
-              <h3 className="font-black text-2xl text-slate-900 tracking-tight">Tenant Onboarding Filters</h3>
+              <h3 className="font-black text-2xl text-slate-900 tracking-tight">Tenant Verification Filter</h3>
               <button 
                 onClick={() => setTenantFilters({category: 'All', status: 'All', search: ''})}
                 className="text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline"
@@ -557,11 +668,11 @@ export const SuperAdminDashboard: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50 transition-all"
                 >
                   <option value="All">All Statuses</option>
-                  <option value="active">Approved</option>
                   <option value="pending">Pending Review</option>
+                  <option value="active">Approved</option>
                   <option value="rejected">Rejected</option>
-                  <option value="info_requested">Pending Info Request</option>
                   <option value="suspended">Suspended</option>
+                  <option value="info_requested">Info Requested</option>
                 </select>
               </div>
               <div className="space-y-2">
@@ -570,7 +681,7 @@ export const SuperAdminDashboard: React.FC = () => {
                   <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
                   <input 
                     type="text" 
-                    placeholder="Search name or ID..."
+                    placeholder="Search name, ID, or email..."
                     value={tenantFilters.search}
                     onChange={(e) => setTenantFilters({...tenantFilters, search: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 font-bold text-slate-700 outline-none focus:ring-4 ring-indigo-50 transition-all"
@@ -582,18 +693,43 @@ export const SuperAdminDashboard: React.FC = () => {
 
           <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/20">
-              <div>
-                <h3 className="font-black text-2xl text-slate-900 tracking-tight">Tenant Onboarding Ledger</h3>
-                <p className="text-slate-400 font-medium text-sm">Reviewing {filteredBusinesses.length} business registration applications.</p>
+              <div className="flex items-center gap-6">
+                <div>
+                  <h3 className="font-black text-2xl text-slate-900 tracking-tight">Ecosystem Ledger</h3>
+                  <p className="text-slate-400 font-medium text-sm">Managing {filteredBusinesses.length} business entities.</p>
+                </div>
+                {selectedBusinessIds.length > 0 && (
+                  <div className="flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-2xl border border-indigo-100 animate-in slide-in-from-left duration-200">
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{selectedBusinessIds.length} Selected</span>
+                    <button onClick={() => setSelectedBusinessIds([])} className="text-indigo-400 hover:text-indigo-600"><i className="fas fa-times-circle"></i></button>
+                  </div>
+                )}
               </div>
               
               <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={handleBulkApprovePending}
-                  className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-100"
-                >
-                  <i className="fas fa-check-double"></i> Bulk Approve Pending
-                </button>
+                {selectedBusinessIds.length > 0 ? (
+                  <>
+                    <button 
+                      onClick={handleBulkSuspendSelected}
+                      className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all flex items-center gap-2 shadow-lg shadow-slate-200"
+                    >
+                      <i className="fas fa-ban"></i> Suspend Selected
+                    </button>
+                    <button 
+                      onClick={handleBulkRejectSelected}
+                      className="px-6 py-3 bg-white border border-rose-200 text-rose-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center gap-2"
+                    >
+                      <i className="fas fa-times-circle"></i> Reject Selected
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={handleBulkApprovePending}
+                    className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-100"
+                  >
+                    <i className="fas fa-check-double"></i> Fast-Track Pending
+                  </button>
+                )}
               </div>
             </div>
 
@@ -606,13 +742,14 @@ export const SuperAdminDashboard: React.FC = () => {
                         type="checkbox" 
                         checked={selectedBusinessIds.length === filteredBusinesses.length && filteredBusinesses.length > 0} 
                         onChange={toggleSelectAllBusinesses}
-                        className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        className="w-5 h-5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                       />
                     </th>
                     <th className="px-10 py-6">Business Entity</th>
+                    <th className="px-10 py-6">Business ID</th>
                     <th className="px-10 py-6">Category</th>
-                    <th className="px-10 py-6">Business Owner</th>
-                    <th className="px-10 py-6">Registration Date</th>
+                    <th className="px-10 py-6">Owner Identity</th>
+                    <th className="px-10 py-6">Reg. Date</th>
                     <th className="px-10 py-6">Verification Status</th>
                     <th className="px-10 py-6 text-right">Actions</th>
                   </tr>
@@ -621,7 +758,7 @@ export const SuperAdminDashboard: React.FC = () => {
                   {filteredBusinesses.map(biz => {
                     const owner = MOCK_USERS.find(u => u.id === biz.ownerId);
                     return (
-                      <tr key={biz.id} className={`transition-all group ${selectedBusinessIds.includes(biz.id) ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}>
+                      <tr key={biz.id} className={`transition-all group ${selectedBusinessIds.includes(biz.id) ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50'}`}>
                         <td className="px-10 py-7">
                           <input 
                             type="checkbox" 
@@ -632,24 +769,30 @@ export const SuperAdminDashboard: React.FC = () => {
                         </td>
                         <td className="px-10 py-7">
                           <div className="flex items-center gap-4">
-                            <img src={biz.images[0]} className="w-12 h-12 rounded-xl object-cover shadow-sm ring-2 ring-white" />
-                            <div>
-                              <p className="font-black text-slate-900 leading-none mb-1 text-base">{biz.name}</p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID: {biz.id.toUpperCase()}</p>
+                            <div className="relative">
+                              <img src={biz.images[0]} className="w-12 h-12 rounded-xl object-cover shadow-sm ring-2 ring-white" />
+                              {biz.status === 'active' && <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>}
                             </div>
+                            <p className="font-black text-slate-900 leading-none text-base group-hover:text-indigo-600 transition-colors">{biz.name}</p>
                           </div>
+                        </td>
+                        <td className="px-10 py-7">
+                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID-{biz.id.toUpperCase()}</span>
                         </td>
                         <td className="px-10 py-7">
                            <span className="text-xs font-bold text-slate-600">{biz.category}</span>
                         </td>
                         <td className="px-10 py-7">
                            <div className="flex items-center gap-3">
-                              <img src={owner?.avatar} className="w-8 h-8 rounded-full object-cover" />
-                              <span className="text-xs font-bold text-slate-700">{owner?.name || 'Unknown Owner'}</span>
+                              <img src={owner?.avatar} className="w-8 h-8 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" />
+                              <div>
+                                <p className="text-xs font-black text-slate-700 leading-tight">{owner?.name || 'External Partner'}</p>
+                                <p className="text-[10px] font-bold text-slate-400">{owner?.email || 'no-email@seulanga.com'}</p>
+                              </div>
                            </div>
                         </td>
-                        <td className="px-10 py-7 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                           {biz.registrationDate}
+                        <td className="px-10 py-7">
+                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">{biz.registrationDate}</span>
                         </td>
                         <td className="px-10 py-7">
                            {renderStatusBadge(biz.status)}
@@ -657,9 +800,9 @@ export const SuperAdminDashboard: React.FC = () => {
                         <td className="px-10 py-7 text-right">
                            <button 
                              onClick={() => { setSelectedBusiness(biz); setReviewModalOpen(true); }}
-                             className="px-6 py-2.5 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-md group-hover:scale-105"
+                             className="px-6 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm group-hover:scale-105"
                            >
-                             Review Detail
+                             Case Detail
                            </button>
                         </td>
                       </tr>
@@ -672,35 +815,241 @@ export const SuperAdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Placeholder for other tabs if they were partially implemented in prior changes */}
-      {activeTab === 'monetization' && (
-        <div className="grid lg:grid-cols-3 gap-8">
-           {plans.map(plan => (
-             <div key={plan.id} className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between">
-                <div>
-                   <h4 className="text-2xl font-black text-slate-900 mb-2">{plan.name}</h4>
-                   <p className="text-3xl font-black text-indigo-600 mb-8">{plan.price}</p>
-                   <div className="space-y-4 mb-8">
-                      {plan.features.map(f => (
-                        <div key={f} className="flex items-center gap-3 text-sm font-medium text-slate-500">
-                           <i className="fas fa-check-circle text-indigo-400"></i>
-                           {f}
+      {activeTab === 'reviews' && (
+        <div className="space-y-8 animate-fade-up">
+           <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Review Moderation Matrix</h2>
+                <p className="text-slate-500 font-medium text-sm">Review, flag, and filter platform-wide guest feedback.</p>
+              </div>
+           </div>
+
+           <div className="grid gap-6">
+              {reviews.map(review => {
+                const business = MOCK_BUSINESSES.find(b => b.id === review.businessId);
+                return (
+                  <div key={review.id} className={`bg-white p-8 rounded-[40px] border shadow-sm transition-all flex flex-col md:flex-row gap-8 ${
+                    review.status === 'pending' ? 'border-indigo-100' : 'border-slate-50'
+                  }`}>
+                    <div className="flex-1 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                           <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center font-black text-indigo-600 shadow-sm border border-slate-100">
+                             {review.guestName[0]}
+                           </div>
+                           <div>
+                              <p className="font-black text-slate-900">{review.guestName}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reviewed {business?.name}</p>
+                           </div>
                         </div>
-                      ))}
-                   </div>
+                        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-3 py-1 rounded-lg font-black text-sm">
+                           <i className="fas fa-star"></i> {review.rating}
+                        </div>
+                      </div>
+
+                      <div className="p-6 bg-slate-50/50 rounded-3xl border border-slate-100">
+                         <p className="text-slate-700 font-medium italic leading-relaxed">"{review.comment}"</p>
+                      </div>
+
+                      {review.flags && review.flags.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                           {review.flags.map(flag => (
+                             <span key={flag} className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest rounded-full border border-rose-100 flex items-center gap-2">
+                               <i className="fas fa-triangle-exclamation text-[8px]"></i> {flag}
+                             </span>
+                           ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="md:w-64 shrink-0 flex flex-col justify-center gap-3">
+                      <div className="text-center mb-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border ${
+                          review.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                          review.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                          'bg-rose-50 text-rose-600 border-rose-100'
+                        }`}>
+                          {review.status}
+                        </span>
+                      </div>
+                      {review.status === 'pending' && (
+                        <>
+                          <button 
+                            onClick={() => handleModerateReview(review.id, 'approved')}
+                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                          >
+                            Approve Publicly
+                          </button>
+                          <button 
+                            onClick={() => handleModerateReview(review.id, 'rejected')}
+                            className="w-full py-4 bg-white border border-rose-100 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-all"
+                          >
+                            Reject & Archive
+                          </button>
+                        </>
+                      )}
+                      {review.status !== 'pending' && (
+                        <button 
+                          onClick={() => setReviews(reviews.map(r => r.id === review.id ? { ...r, status: 'pending' } : r))}
+                          className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all"
+                        >
+                          Reset to Pending
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {reviews.length === 0 && (
+                <div className="text-center py-20 bg-white rounded-[40px] border border-slate-100">
+                   <p className="text-slate-400 font-bold">No reviews found in the moderation queue.</p>
                 </div>
-                <button 
-                  onClick={() => { setEditingPlan(plan); setPlanModalOpen(true); }}
-                  className="w-full py-4 border-2 border-slate-100 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all"
-                >
-                   Modify Tier Details
-                </button>
-             </div>
-           ))}
+              )}
+           </div>
         </div>
       )}
 
-      {/* Review Modal is already handled inside activeTab === 'tenants' scope but can be made global if needed */}
+      {activeTab === 'monetization' && (
+        <div className="space-y-10 animate-fade-up">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">Subscription Architecture</h2>
+              <p className="text-slate-500 font-medium">Define global pricing tiers and platform rules.</p>
+            </div>
+            <button 
+              onClick={() => { setEditingPlan(null); setPlanModalOpen(true); }}
+              className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-sm flex items-center gap-3 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"
+            >
+              <i className="fas fa-plus"></i> Architect New Tier
+            </button>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-8">
+             {plans.map(plan => (
+               <div key={plan.id} className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-between group hover:shadow-2xl transition-all relative">
+                  <div className="absolute top-8 right-8 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditingPlan(plan); setPlanModalOpen(true); }} className="w-10 h-10 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-xl flex items-center justify-center border border-slate-100 shadow-sm"><i className="fas fa-edit"></i></button>
+                    <button onClick={() => handleDeletePlan(plan.id)} className="w-10 h-10 bg-slate-50 text-slate-400 hover:text-rose-600 rounded-xl flex items-center justify-center border border-slate-100 shadow-sm"><i className="fas fa-trash-alt"></i></button>
+                  </div>
+                  <div>
+                     <div className="flex items-center gap-3 mb-2">
+                        <h4 className="text-2xl font-black text-slate-900">{plan.name}</h4>
+                        {plan.trialPeriodDays > 0 && (
+                          <span className="px-3 py-1 bg-amber-50 text-amber-600 text-[8px] font-black uppercase rounded-full border border-amber-100">{plan.trialPeriodDays} Day Trial</span>
+                        )}
+                     </div>
+                     <div className="flex items-end gap-2 mb-8">
+                        <span className="text-4xl font-black text-indigo-600 tracking-tighter">{plan.price}</span>
+                        <span className="text-xs font-bold text-slate-400 mb-1">/ {plan.billingCycle.toLowerCase()}</span>
+                     </div>
+                     
+                     <div className="space-y-4 mb-8">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ecosystem Rules</p>
+                          <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                             <span>Commission: {plan.commission}</span>
+                             <span>Max Units: {plan.maxUnits}</span>
+                          </div>
+                        </div>
+                        {plan.features.map(f => (
+                          <div key={f} className="flex items-center gap-3 text-sm font-medium text-slate-500">
+                             <i className="fas fa-check-circle text-indigo-400"></i>
+                             {f}
+                          </div>
+                        ))}
+                     </div>
+                  </div>
+                  <button 
+                    onClick={() => { setEditingPlan(plan); setPlanModalOpen(true); }}
+                    className="w-full py-4 border-2 border-slate-100 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all"
+                  >
+                     Configure Tier Details
+                  </button>
+               </div>
+             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Audit Logs View */}
+      {activeTab === 'logs' && (
+        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden animate-fade-up">
+           <div className="p-10 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
+              <div>
+                <h3 className="font-black text-2xl text-slate-900 tracking-tight">System Audit Matrix</h3>
+                <p className="text-slate-400 font-medium text-sm">Real-time security and management activity log.</p>
+              </div>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowExportDropdown(!showExportDropdown)}
+                  className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-sm flex items-center gap-3 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                >
+                  <i className="fas fa-download"></i> Export Logs
+                </button>
+                {showExportDropdown && (
+                  <div className="absolute right-0 mt-3 w-48 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-50 p-2 animate-in zoom-in-95 duration-200 origin-top-right">
+                    <button 
+                      onClick={handleExportCSV}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl transition-all group"
+                    >
+                      <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                        <i className="fas fa-file-csv"></i>
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">Export as CSV</span>
+                    </button>
+                    <button 
+                      onClick={handleExportJSON}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl transition-all group"
+                    >
+                      <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                        <i className="fas fa-file-code"></i>
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">Export as JSON</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+           </div>
+           <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                 <thead>
+                    <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                       <th className="px-10 py-6">Timestamp</th>
+                       <th className="px-10 py-6">Administrator</th>
+                       <th className="px-10 py-6">Action Protocol</th>
+                       <th className="px-10 py-6">Target Entity</th>
+                       <th className="px-10 py-6">Log Class</th>
+                    </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-50">
+                    {auditLogs.map(log => (
+                       <tr key={log.id} className="hover:bg-slate-50/50 transition-all">
+                          <td className="px-10 py-6 text-xs font-bold text-slate-500">{log.timestamp}</td>
+                          <td className="px-10 py-6">
+                             <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-[10px]">{log.actorName[0]}</span>
+                                <span className="text-xs font-bold text-slate-700">{log.actorName}</span>
+                             </div>
+                          </td>
+                          <td className="px-10 py-6 text-xs font-black text-slate-900">{log.action}</td>
+                          <td className="px-10 py-6 text-xs font-bold text-slate-500">{log.target}</td>
+                          <td className="px-10 py-6">
+                             <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                               log.type === 'financial' ? 'bg-emerald-50 text-emerald-600' :
+                               log.type === 'security' ? 'bg-rose-50 text-rose-600' :
+                               'bg-indigo-50 text-indigo-600'
+                             }`}>
+                                {log.type}
+                             </span>
+                          </td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
