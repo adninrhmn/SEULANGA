@@ -1,9 +1,14 @@
 
 import React from 'react';
 import { MOCK_BUSINESSES } from '../constants';
-import { BusinessCategory } from '../types';
+import { BusinessCategory, Business } from '../types';
 
-export const LandingPage: React.FC<{ onNavigate: (view: string) => void }> = ({ onNavigate }) => {
+interface LandingPageProps {
+  onNavigate: (view: string) => void;
+  onSelectProperty: (property: Business) => void;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate, onSelectProperty }) => {
   return (
     <div className="space-y-24 pb-20">
       {/* Hero Section */}
@@ -86,7 +91,7 @@ export const LandingPage: React.FC<{ onNavigate: (view: string) => void }> = ({ 
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 px-4">
           {MOCK_BUSINESSES.map((b) => (
-            <div key={b.id} className="group flex flex-col bg-white rounded-[32px] overflow-hidden border border-slate-100 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
+            <div key={b.id} onClick={() => onSelectProperty(b)} className="group cursor-pointer flex flex-col bg-white rounded-[32px] overflow-hidden border border-slate-100 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
               <div className="relative h-80 overflow-hidden">
                 <img src={b.images[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>

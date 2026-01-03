@@ -1,7 +1,8 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Initialize using the pre-configured environment variable without fallbacks.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getBusinessInsights = async (businessData: any) => {
   try {
@@ -12,6 +13,7 @@ export const getBusinessInsights = async (businessData: any) => {
         thinkingConfig: { thinkingBudget: 0 }
       }
     });
+    // Accessing text as a property on the response object.
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);
@@ -25,6 +27,7 @@ export const generatePropertyDescription = async (details: { name: string, categ
       model: 'gemini-3-flash-preview',
       contents: `Write a compelling, SEO-friendly property description for ${details.name}, a ${details.category}. Amenities include: ${details.amenities.join(', ')}.`,
     });
+    // Accessing text as a property on the response object.
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_ADS, MOCK_AUDIT_LOGS, MOCK_USERS } from '../constants';
 import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area } from 'recharts';
@@ -41,8 +41,17 @@ export const SuperAdminDashboard: React.FC = () => {
 
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
-  const [logFilter, setLogFilter] = useState<string>('All');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  
+  // Granular Filter State
+  const [filters, setFilters] = useState({
+    category: 'All',
+    role: 'All',
+    action: 'All',
+    startDate: '',
+    endDate: '',
+    search: ''
+  });
 
   // Platform Settings State
   const [platformSettings, setPlatformSettings] = useState({
@@ -135,9 +144,24 @@ export const SuperAdminDashboard: React.FC = () => {
     }
   };
 
+  // Memoized unique values for filter dropdowns
+  const uniqueActions = useMemo(() => Array.from(new Set(auditLogs.map(l => l.action))), [auditLogs]);
+  const uniqueRoles = useMemo(() => Array.from(new Set(auditLogs.map(l => l.actorRole))), [auditLogs]);
+
   const filteredLogs = auditLogs.filter(log => {
-    if (logFilter === 'All') return true;
-    return log.type.toLowerCase() === logFilter.toLowerCase();
+    const matchCategory = filters.category === 'All' || log.type.toLowerCase() === filters.category.toLowerCase();
+    const matchRole = filters.role === 'All' || log.actorRole === filters.role;
+    const matchAction = filters.action === 'All' || log.action === filters.action;
+    const matchSearch = !filters.search || 
+      log.target.toLowerCase().includes(filters.search.toLowerCase()) || 
+      log.actorName.toLowerCase().includes(filters.search.toLowerCase());
+    
+    // Simple date string parsing for comparison
+    const logDate = new Date(log.timestamp);
+    const matchStartDate = !filters.startDate || logDate >= new Date(filters.startDate);
+    const matchEndDate = !filters.endDate || logDate <= new Date(filters.endDate + 'T23:59:59');
+
+    return matchCategory && matchRole && matchAction && matchSearch && matchStartDate && matchEndDate;
   });
 
   return (
@@ -355,76 +379,151 @@ export const SuperAdminDashboard: React.FC = () => {
       )}
 
       {activeTab === 'logs' && (
-        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden animate-fade-up">
-           <div className="p-10 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
-            <div>
-              <h3 className="font-black text-2xl text-slate-900 tracking-tight">System Audit Logs</h3>
-              <p className="text-slate-400 font-medium text-sm">Immutable ledger of all platform-wide administrative activities.</p>
+        <div className="space-y-6 animate-fade-up">
+          {/* Granular Filter Panel */}
+          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
+            <div className="flex items-center justify-between">
+               <h3 className="font-black text-2xl text-slate-900 tracking-tight">Advanced Filter Panel</h3>
+               <button 
+                onClick={() => setFilters({category: 'All', role: 'All', action: 'All', startDate: '', endDate: '', search: ''})}
+                className="text-xs font-black text-rose-600 uppercase tracking-widest hover:underline"
+               >
+                 Reset All
+               </button>
             </div>
-            <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto scrollbar-hide max-w-full">
-              {['All', 'Financial', 'Management', 'Security', 'System'].map(cat => (
-                <button 
-                    key={cat} 
-                    onClick={() => setLogFilter(cat)}
-                    className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${logFilter === cat ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-indigo-600'}`}>
-                    {cat}
-                </button>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</label>
+                 <select 
+                  value={filters.category}
+                  onChange={(e) => setFilters({...filters, category: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                 >
+                   {['All', 'Financial', 'Management', 'Security', 'System'].map(c => <option key={c} value={c}>{c}</option>)}
+                 </select>
+               </div>
+
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Actor Role</label>
+                 <select 
+                  value={filters.role}
+                  onChange={(e) => setFilters({...filters, role: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                 >
+                   <option value="All">All Roles</option>
+                   {uniqueRoles.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+                 </select>
+               </div>
+
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Action Type</label>
+                 <select 
+                  value={filters.action}
+                  onChange={(e) => setFilters({...filters, action: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                 >
+                   <option value="All">All Actions</option>
+                   {uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}
+                 </select>
+               </div>
+
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</label>
+                 <input 
+                  type="date"
+                  value={filters.startDate}
+                  onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                 />
+               </div>
+
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">End Date</label>
+                 <input 
+                  type="date"
+                  value={filters.endDate}
+                  onChange={(e) => setFilters({...filters, endDate: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                 />
+               </div>
+
+               <div className="space-y-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quick Search</label>
+                 <input 
+                  type="text"
+                  placeholder="Target or Actor..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({...filters, search: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:ring-2 ring-indigo-100"
+                 />
+               </div>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
-                  <th className="px-10 py-6">Actor Identity</th>
-                  <th className="px-10 py-6">Action Performed</th>
-                  <th className="px-10 py-6">Target Resource</th>
-                  <th className="px-10 py-6">Log Type</th>
-                  <th className="px-10 py-6 text-right">Execution Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredLogs.map(log => (
-                  <tr key={log.id} onClick={() => setSelectedLog(log)} className="hover:bg-slate-50/50 transition-all group cursor-pointer">
-                    <td className="px-10 py-7">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-black text-[10px] ${log.actorRole === UserRole.SUPER_ADMIN ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                           {log.actorName.split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900 text-sm leading-none mb-1">{log.actorName}</p>
-                          <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{log.actorRole.replace('_', ' ')}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-7 font-bold text-slate-700 text-sm">{log.action}</td>
-                    <td className="px-10 py-7">
-                       <span className="text-xs font-black text-slate-900 underline decoration-indigo-200 decoration-2 underline-offset-4">{log.target}</span>
-                    </td>
-                    <td className="px-10 py-7">
-                        <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase border ${
-                            log.type === 'financial' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                            log.type === 'security' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                            log.type === 'management' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                            'bg-slate-50 text-slate-500 border-slate-200'
-                        }`}>
-                            {log.type}
-                        </span>
-                    </td>
-                    <td className="px-10 py-7 text-right text-[10px] font-black text-slate-400 uppercase whitespace-nowrap">
-                        {log.timestamp}
-                    </td>
+
+          <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="p-10 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
+              <div>
+                <h3 className="font-black text-2xl text-slate-900 tracking-tight">Audit Stream</h3>
+                <p className="text-slate-400 font-medium text-sm">Showing {filteredLogs.length} matching events.</p>
+              </div>
+              <button className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:border-indigo-600 transition-all">
+                Export Filtered View
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                    <th className="px-10 py-6">Actor Identity</th>
+                    <th className="px-10 py-6">Action Performed</th>
+                    <th className="px-10 py-6">Target Resource</th>
+                    <th className="px-10 py-6">Log Type</th>
+                    <th className="px-10 py-6 text-right">Execution Time</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {filteredLogs.length === 0 && (
-            <div className="py-20 text-center">
-               <i className="fas fa-database text-4xl text-slate-200 mb-4"></i>
-               <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No records found for this filter</p>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredLogs.map(log => (
+                    <tr key={log.id} onClick={() => setSelectedLog(log)} className="hover:bg-slate-50/50 transition-all group cursor-pointer">
+                      <td className="px-10 py-7">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-black text-[10px] ${log.actorRole === UserRole.SUPER_ADMIN ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                             {log.actorName.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-900 text-sm leading-none mb-1">{log.actorName}</p>
+                            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{log.actorRole.replace('_', ' ')}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-10 py-7 font-bold text-slate-700 text-sm">{log.action}</td>
+                      <td className="px-10 py-7">
+                         <span className="text-xs font-black text-slate-900 underline decoration-indigo-200 decoration-2 underline-offset-4">{log.target}</span>
+                      </td>
+                      <td className="px-10 py-7">
+                          <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase border ${
+                              log.type === 'financial' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                              log.type === 'security' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                              log.type === 'management' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                              'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}>
+                              {log.type}
+                          </span>
+                      </td>
+                      <td className="px-10 py-7 text-right text-[10px] font-black text-slate-400 uppercase whitespace-nowrap">
+                          {log.timestamp}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+            {filteredLogs.length === 0 && (
+              <div className="py-20 text-center">
+                 <i className="fas fa-search-minus text-4xl text-slate-200 mb-4"></i>
+                 <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No records matching your filters</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -545,7 +644,6 @@ export const SuperAdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Finance, Monitization, and Ad Engine sections remain consistent with previous turns... */}
       {(activeTab === 'finance' || activeTab === 'monetization' || activeTab === 'ads') && (
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm text-center py-24">
             <i className="fas fa-lock text-4xl text-slate-200 mb-6"></i>

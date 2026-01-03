@@ -1,15 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
-import { User, UserRole } from './types';
+import { User, UserRole, Business } from './types';
 import { LandingPage } from './views/LandingPage';
 import { OwnerDashboard } from './views/OwnerDashboard';
 import { SuperAdminDashboard } from './views/SuperAdminDashboard';
+import { StaffDashboard } from './views/StaffDashboard';
+import { GuestDashboard } from './views/GuestDashboard';
+import { PropertyDetail } from './views/PropertyDetail';
+import { Marketplace } from './views/Marketplace';
 import { MOCK_USERS } from './constants';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<string>('landing');
+  const [selectedProperty, setSelectedProperty] = useState<Business | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -24,6 +29,8 @@ const App: React.FC = () => {
       setCurrentUser(user);
       if (role === UserRole.BUSINESS_OWNER) setCurrentView('owner-dash');
       else if (role === UserRole.SUPER_ADMIN) setCurrentView('super-admin');
+      else if (role === UserRole.ADMIN_STAFF) setCurrentView('staff-dash');
+      else if (role === UserRole.GUEST) setCurrentView('guest-dash');
       else setCurrentView('landing');
     }
   };
@@ -31,6 +38,12 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     setCurrentView('landing');
+    setSelectedProperty(null);
+  };
+
+  const navigateToProperty = (property: Business) => {
+    setSelectedProperty(property);
+    setCurrentView('property-detail');
   };
 
   if (isLoading) {
@@ -54,21 +67,19 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case 'landing':
-        return <LandingPage onNavigate={setCurrentView} />;
+        return <LandingPage onNavigate={setCurrentView} onSelectProperty={navigateToProperty} />;
       case 'owner-dash':
         return <OwnerDashboard />;
       case 'super-admin':
         return <SuperAdminDashboard />;
+      case 'staff-dash':
+        return <StaffDashboard />;
+      case 'guest-dash':
+        return <GuestDashboard />;
+      case 'property-detail':
+        return selectedProperty ? <PropertyDetail property={selectedProperty} onBack={() => setCurrentView('explore')} /> : <LandingPage onNavigate={setCurrentView} onSelectProperty={navigateToProperty} />;
       case 'explore':
-        return (
-          <div className="text-center py-20 animate-fade-up">
-            <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-8">
-               <i className="fas fa-search text-4xl text-indigo-600"></i>
-            </div>
-            <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Marketplace Under Construction</h2>
-            <p className="text-slate-500 font-medium max-w-md mx-auto">We are populating our ecosystem with the most premium properties in Northern Sumatra.</p>
-          </div>
-        );
+        return <Marketplace onSelectProperty={navigateToProperty} />;
       case 'login':
         return (
           <div className="max-w-xl mx-auto py-20 px-6">
@@ -88,6 +99,13 @@ const App: React.FC = () => {
                   desc: 'Complete property control & scaling tools', 
                   icon: 'fa-hotel', 
                   color: 'bg-indigo-600' 
+                },
+                { 
+                  role: UserRole.ADMIN_STAFF, 
+                  label: 'Operations Team', 
+                  desc: 'Front-desk tools for staff & receptionists', 
+                  icon: 'fa-clipboard-user', 
+                  color: 'bg-violet-600' 
                 },
                 { 
                   role: UserRole.GUEST, 
@@ -125,7 +143,7 @@ const App: React.FC = () => {
           </div>
         );
       default:
-        return <LandingPage onNavigate={setCurrentView} />;
+        return <LandingPage onNavigate={setCurrentView} onSelectProperty={navigateToProperty} />;
     }
   };
 

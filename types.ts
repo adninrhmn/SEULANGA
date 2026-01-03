@@ -30,6 +30,13 @@ export enum BookingStatus {
   COMPLETED = 'Completed'
 }
 
+export enum VerificationStatus {
+  UNVERIFIED = 'Unverified',
+  PENDING = 'Pending',
+  VERIFIED = 'Verified',
+  REJECTED = 'Rejected'
+}
+
 export interface User {
   id: string;
   name: string;
@@ -38,6 +45,9 @@ export interface User {
   businessId?: string;
   avatar?: string;
   createdAt: string;
+  verificationStatus?: VerificationStatus;
+  phoneNumber?: string;
+  wishlist?: string[]; // Array of Business IDs
 }
 
 export interface Business {
@@ -53,8 +63,9 @@ export interface Business {
   images: string[];
   rating: number;
   location: { lat: number; lng: number };
-  commissionRate?: number; // Platform percentage
-  serviceFee?: number; // Guest flat fee
+  commissionRate?: number;
+  serviceFee?: number;
+  tags?: string[];
 }
 
 export interface Unit {
@@ -67,6 +78,7 @@ export interface Unit {
   available: boolean;
   amenities: string[];
   images: string[];
+  description?: string;
 }
 
 export interface Transaction {
@@ -102,14 +114,17 @@ export interface Booking {
   status: BookingStatus;
   paymentProof?: string;
   createdAt: string;
+  notes?: string;
 }
 
-export interface Message {
+export interface Inquiry {
   id: string;
-  senderId: string;
-  receiverId: string;
-  content: string;
-  timestamp: string;
+  businessId: string;
+  guestId: string;
+  subject: string;
+  message: string;
+  status: 'open' | 'resolved' | 'closed';
+  createdAt: string;
 }
 
 export interface AuditLog {
