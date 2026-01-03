@@ -1,26 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { MOCK_BUSINESSES, MOCK_TRANSACTIONS, MOCK_AUDIT_LOGS, MOCK_USERS, MOCK_REVIEWS, TRANSLATIONS, MOCK_BOOKINGS, DEFAULT_CATEGORY_MODULE_MAP } from '../constants';
-import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule, BookingStatus, Booking, SEOMetadata, HomepageBanner, Complaint, Dispute, EmailTemplate, NotificationRule, PaymentGateway } from '../types';
+import { BusinessCategory, SubscriptionPlan, Business, AuditLog, UserRole, BusinessStatus, Review, Transaction, User, VerificationStatus, CategoryModuleConfig, SystemModule, BookingStatus, Booking, SEOMetadata, HomepageBanner, Complaint, Dispute, EmailTemplate, NotificationRule, PaymentGateway, LoginLog, IPRestriction, SystemBackup, SecurityIncident } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, ComposedChart, Line, Legend, PieChart, Pie, Cell
 } from 'recharts';
-
-// Enhanced mock data for trends
-const platformTrendData = [
-  { name: 'Jul', revenue: 450, commission: 67, bookings: 120 },
-  { name: 'Aug', revenue: 520, commission: 78, bookings: 155 },
-  { name: 'Sep', revenue: 480, commission: 72, bookings: 142 },
-  { name: 'Oct', revenue: 610, commission: 91, bookings: 198 },
-  { name: 'Nov', revenue: 680, commission: 102, bookings: 215 },
-  { name: 'Dec', revenue: 850, commission: 127, bookings: 290 },
-];
-
-const revenueMixData = [
-  { name: 'Subscriptions', value: 45, color: '#4f46e5' },
-  { name: 'Commissions', value: 35, color: '#10b981' },
-  { name: 'Featured Ads', value: 20, color: '#f59e0b' },
-];
 
 interface SubPlan {
   id: string;
@@ -37,20 +21,8 @@ const INITIAL_PLANS: SubPlan[] = [
   { id: 'p3', name: 'Elite Premium', price: 1200000, commission: 5, features: ['24/7 Concierge', 'AI Insights', 'Custom Reports', 'Featured Ads (2/mo)', 'Zero Service Fee'], status: 'active' },
 ];
 
-const PERMISSION_KEYS = [
-  'platform_config',
-  'user_termination',
-  'audit_view',
-  'business_mgmt',
-  'revenue_payout',
-  'staff_mgmt',
-  'booking_mgmt',
-  'review_mgmt',
-  'listing_post'
-];
-
 interface SuperAdminDashboardProps {
-  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings' | 'profile' | 'engine' | 'accounts' | 'matrix' | 'oversight' | 'quality' | 'trust';
+  activeTab: 'overview' | 'analytics' | 'monetization' | 'tenants' | 'reviews' | 'finance' | 'logs' | 'settings' | 'profile' | 'engine' | 'accounts' | 'matrix' | 'oversight' | 'quality' | 'trust' | 'security';
   onNavigate: (view: string, subView?: string) => void;
   language: 'id' | 'en';
   moduleConfigs: CategoryModuleConfig;
@@ -83,6 +55,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [transactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
   const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS.map(r => ({ ...r, status: 'pending' })));
   
+  // Account Governance State
+  const [accountTypeFilter, setAccountTypeFilter] = useState<UserRole>(UserRole.BUSINESS_OWNER);
+  const [isAddOwnerModalOpen, setIsAddOwnerModalOpen] = useState(false);
+  const [suspendedUserIds, setSuspendedUserIds] = useState<Set<string>>(new Set());
+  const [roleMatrix, setRoleMatrix] = useState<Record<UserRole, string[]>>({
+    [UserRole.SUPER_ADMIN]: ['all_access', 'manage_ecosystem', 'financial_clearance', 'security_override'],
+    [UserRole.BUSINESS_OWNER]: ['manage_business', 'staff_governance', 'revenue_audit', 'unit_matrix'],
+    [UserRole.ADMIN_STAFF]: ['check_in_out', 'payment_verify', 'maintenance_log', 'guest_comms'],
+    [UserRole.GUEST]: ['booking_create', 'wishlist_sync', 'review_submit', 'support_ticket']
+  });
+
+  // Modals state
+  const [isAddBizModalOpen, setIsAddBizModalOpen] = useState(false);
+  const [selectedBizDetail, setSelectedBizDetail] = useState<Business | null>(null);
+
   // Platform Quality States
   const [seoMetadata, setSeoMetadata] = useState<SEOMetadata>({
     title: "SEULANGA | Elite Property & Hospitality OS",
@@ -102,6 +89,30 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     { id: 'dsp-1', bookingId: 'bk1', businessId: 'b1', guestId: 'u4', claimAmount: 500000, reason: 'Double charged for breakfast', status: 'open', createdAt: '2024-12-29' }
   ]);
 
+  // Security States
+  const [loginLogs, setLoginLogs] = useState<LoginLog[]>([
+    { id: 'll-1', userId: 'u1', userName: 'Zian Ali', ipAddress: '192.168.1.1', device: 'Chrome / MacOS', status: 'success', timestamp: '2024-12-30 08:45:12' },
+    { id: 'll-2', userId: 'u2', userName: 'John Doe', ipAddress: '103.25.11.2', device: 'Safari / iPhone', status: 'success', timestamp: '2024-12-30 09:12:05' },
+    { id: 'll-3', userId: 'unknown', userName: 'Unknown', ipAddress: '45.112.33.2', device: 'Unknown Browser', status: 'failed', timestamp: '2024-12-30 10:05:44' }
+  ]);
+
+  const [ipRestrictions, setIpRestrictions] = useState<IPRestriction[]>([
+    { id: 'ip-1', ip: '192.168.1.0/24', type: 'allow', description: 'Internal Office Range', createdAt: '2024-01-01' },
+    { id: 'ip-2', ip: '203.0.113.5', type: 'block', description: 'Repeated Brute Force Attempt', createdAt: '2024-12-15' }
+  ]);
+
+  const [backups, setBackups] = useState<SystemBackup[]>([
+    { id: 'bk-1', name: 'SEULANGA_PROD_20241229_0000', size: '2.4 GB', status: 'completed', createdAt: '2024-12-29 00:00:00' },
+    { id: 'bk-2', name: 'SEULANGA_PROD_20241230_0000', size: '2.45 GB', status: 'completed', createdAt: '2024-12-30 00:00:00' }
+  ]);
+
+  const [incidents, setIncidents] = useState<SecurityIncident[]>([
+    { id: 'sc-1', type: 'brute_force', severity: 'high', status: 'resolved', description: '50+ failed login attempts from IP 203.0.113.5 within 2 minutes.', createdAt: '2024-12-15 14:20:00' },
+    { id: 'sc-2', type: 'anomaly', severity: 'medium', status: 'investigating', description: 'Unusual data export volume detected from node b1.', createdAt: '2024-12-30 11:30:00' }
+  ]);
+
+  const [auditLogs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
+
   // Global Settings States
   const [systemConfig, setSystemConfig] = useState({
     currency: 'IDR',
@@ -109,7 +120,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     timezone: 'Asia/Jakarta'
   });
 
-  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([
+  const [emailTemplates] = useState<EmailTemplate[]>([
     { id: 'tpl-1', name: 'Welcome Email', subject: 'Welcome to SEULANGA Ecosystem', body: 'Hello {{name}}, welcome to our elite property network...' },
     { id: 'tpl-2', name: 'Booking Confirmed', subject: 'Reservation Verified: #{{bookingId}}', body: 'Your stay at {{property}} has been confirmed...' }
   ]);
@@ -124,22 +135,26 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     { id: 'gw-2', name: 'Stripe', isActive: false, apiKey: 'sk_test_XXXX', merchantId: 'acct_XXXX', environment: 'sandbox' }
   ]);
 
-  // Monetization States
   const [globalCommission, setGlobalCommission] = useState(12);
   const [adSlotPrice, setAdSlotPrice] = useState(75000);
-  
-  // Oversight Filter States
   const [oversightBizFilter, setOversightBizFilter] = useState<string>('ALL');
   const [oversightDateFilter, setOversightDateFilter] = useState<string>('');
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
-
-  // Subscription Control States
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [activeBizForSub, setActiveBizForSub] = useState<Business | null>(null);
 
+  // Flex Engine States
+  const [categories, setCategories] = useState<string[]>(Object.values(BusinessCategory));
+  const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
+  const [planModuleMapping, setPlanModuleMapping] = useState<Record<SubscriptionPlan, SystemModule[]>>({
+    [SubscriptionPlan.BASIC]: [SystemModule.BOOKING, SystemModule.REVIEWS],
+    [SubscriptionPlan.PRO]: [SystemModule.BOOKING, SystemModule.REVIEWS, SystemModule.PAYMENT, SystemModule.MAINTENANCE, SystemModule.MARKETING, SystemModule.INVENTORY],
+    [SubscriptionPlan.PREMIUM]: Object.values(SystemModule)
+  });
+
   const t = TRANSLATIONS[language];
 
-  // Governance Logic
+  // Logic
   const filteredBookings = useMemo(() => {
     return bookings.filter(bk => {
       const matchBiz = oversightBizFilter === 'ALL' || bk.businessId === oversightBizFilter;
@@ -161,7 +176,33 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Trust Actions
+  // Security Handlers
+  const handleToggleIP = (id: string) => {
+    setIpRestrictions(prev => prev.map(r => r.id === id ? { ...r, type: r.type === 'allow' ? 'block' : 'allow' } : r));
+    alert('Firewall protocol updated.');
+  };
+
+  const handleResolveIncident = (id: string) => {
+    setIncidents(prev => prev.map(i => i.id === id ? { ...i, status: 'resolved' } : i));
+    alert('Security incident flagged as resolved.');
+  };
+
+  const handleManualBackup = () => {
+    const newBackup: SystemBackup = {
+      id: `bk-${Date.now()}`,
+      name: `SEULANGA_MANUAL_${new Date().toISOString().split('T')[0].replace(/-/g, '')}`,
+      size: '2.42 GB',
+      status: 'in_progress',
+      createdAt: new Date().toISOString().replace('T', ' ').split('.')[0]
+    };
+    setBackups(prev => [newBackup, ...prev]);
+    setTimeout(() => {
+      setBackups(prev => prev.map(b => b.id === newBackup.id ? { ...b, status: 'completed' } : b));
+      alert('Snapshot protocol completed successfully.');
+    }, 2000);
+  };
+
+  // Pre-existing handlers
   const handleModerateReview = (id: string, status: 'approved' | 'rejected') => {
     setReviews(prev => prev.map(r => r.id === id ? { ...r, status } : r));
     alert(`Review ${id} node ${status.toUpperCase()} protocol executed.`);
@@ -182,7 +223,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     alert(`Penalty applied to node ${bizId}. Trust score recalculated.`);
   };
 
-  // Pre-existing actions
   const handleUpdatePlanPrice = (id: string, newPrice: number) => {
     setPlans(prev => prev.map(p => p.id === id ? { ...p, price: newPrice } : p));
   };
@@ -221,7 +261,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     alert(`Entity ${bizId} status toggled. Ecosystem node access restricted/restored.`);
   };
 
-  // New Global Config Actions
+  const handleTerminateBusiness = (bizId: string) => {
+    if(confirm("Are you sure you want to terminate this node? This action is irreversible.")) {
+      setBusinesses(prev => prev.map(b => b.id === bizId ? { ...b, status: 'rejected' } : b));
+      alert(`Entity ${bizId} terminated. Forensic cleanup initiated.`);
+    }
+  };
+
   const handleToggleRule = (id: string) => {
     setNotificationRules(prev => prev.map(r => r.id === id ? { ...r, isEnabled: !r.isEnabled } : r));
   };
@@ -230,6 +276,606 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setPaymentGateways(prev => prev.map(g => g.id === id ? { ...g, ...data } : g));
     alert(`Gateway ${id} node updated.`);
   };
+
+  const handleAddBusinessManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const newBiz: Business = {
+      id: `b${Date.now()}`,
+      name: formData.get('name') as string,
+      category: formData.get('category') as string,
+      ownerId: 'u2', // Mock default
+      description: 'Manually added business entity.',
+      address: formData.get('address') as string,
+      status: 'active',
+      subscription: SubscriptionPlan.BASIC,
+      images: ['https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070'],
+      rating: 5.0,
+      location: { lat: 0, lng: 0 }
+    };
+    setBusinesses(prev => [newBiz, ...prev]);
+    setIsAddBizModalOpen(false);
+    alert('Manual Entity Enrollment Complete.');
+  };
+
+  const handleAssignCategory = (bizId: string, category: string) => {
+    setBusinesses(prev => prev.map(b => b.id === bizId ? { ...b, category } : b));
+    alert(`Node ${bizId} topology re-assigned to ${category}.`);
+  };
+
+  // Account Governance Handlers
+  const handleCreateOwner = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const newUser: User = {
+      id: `u-gen-${Date.now()}`,
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      role: UserRole.BUSINESS_OWNER,
+      avatar: 'https://i.pravatar.cc/150?u=' + Date.now(),
+      createdAt: new Date().toISOString().split('T')[0],
+      verificationStatus: VerificationStatus.VERIFIED
+    };
+    setUsers(prev => [...prev, newUser]);
+    setIsAddOwnerModalOpen(false);
+    alert(`Identity Node Created: ${newUser.name}. Enrollment successful.`);
+  };
+
+  const handleToggleUserStatus = (userId: string) => {
+    setSuspendedUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+    alert(`Identity Node status updated for ${userId}. Access protocol modified.`);
+  };
+
+  const handleBanUser = (userId: string) => {
+    if(confirm("Terminate this Identity Node permanently?")) {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      alert(`Identity node ${userId} purged from the core database.`);
+    }
+  };
+
+  const handleResetUserPassword = (userName: string) => {
+    alert(`Password reset token dispatched to ${userName}. Security protocol active.`);
+  };
+
+  const handleTogglePermission = (role: UserRole, permission: string) => {
+    setRoleMatrix(prev => {
+      const current = prev[role];
+      const updated = current.includes(permission) 
+        ? current.filter(p => p !== permission)
+        : [...current, permission];
+      return { ...prev, [role]: updated };
+    });
+  };
+
+  // Flex Engine Handlers
+  const handleAddCategory = (name: string) => {
+    if (categories.includes(name)) return alert("Topology already exists.");
+    setCategories(prev => [...prev, name]);
+    onUpdateModuleConfigs({ ...moduleConfigs, [name]: [SystemModule.REVIEWS] });
+    setIsAddCatModalOpen(false);
+    alert(`New Business Topology Node Created: ${name}`);
+  };
+
+  const handleDeleteCategory = (name: string) => {
+    if (confirm(`Terminate the ${name} topology? This will affect modular access for all associated nodes.`)) {
+      setCategories(prev => prev.filter(c => c !== name));
+      const newConfigs = { ...moduleConfigs };
+      delete newConfigs[name];
+      onUpdateModuleConfigs(newConfigs);
+    }
+  };
+
+  const toggleModuleForCategory = (cat: string, mod: SystemModule) => {
+    const current = moduleConfigs[cat] || [];
+    const updated = current.includes(mod) 
+      ? current.filter(m => m !== mod) 
+      : [...current, mod];
+    onUpdateModuleConfigs({ ...moduleConfigs, [cat]: updated });
+  };
+
+  const toggleModuleForPlan = (plan: SubscriptionPlan, mod: SystemModule) => {
+    const current = planModuleMapping[plan] || [];
+    const updated = current.includes(mod)
+      ? current.filter(m => m !== mod)
+      : [...current, mod];
+    setPlanModuleMapping({ ...planModuleMapping, [plan]: updated });
+  };
+
+  const renderSecurity = () => (
+    <div className="space-y-12 animate-fade-up">
+       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {[
+            { label: 'Security Score', value: '98%', trend: '+0.5%', color: 'text-indigo-600', icon: 'fa-shield-halved' },
+            { label: 'Failed Logins', value: '42', trend: '24h', color: 'text-rose-600', icon: 'fa-user-lock' },
+            { label: 'Active Incidents', value: incidents.filter(i => i.status === 'investigating').length, trend: 'Investigating', color: 'text-amber-600', icon: 'fa-triangle-exclamation' },
+            { label: 'Last Snapshot', value: 'Today, 00:00', trend: 'Automated', color: 'text-emerald-600', icon: 'fa-cloud-arrow-up' },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+               <div className="flex items-center justify-between mb-6">
+                  <div className={`w-12 h-12 bg-slate-50 ${stat.color} rounded-2xl flex items-center justify-center text-lg`}>
+                     <i className={`fas ${stat.icon}`}></i>
+                  </div>
+                  <span className="text-[10px] font-black text-slate-300">{stat.trend}</span>
+               </div>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+               <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{stat.value}</h3>
+            </div>
+          ))}
+       </div>
+
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 bg-slate-950 p-12 rounded-[48px] shadow-2xl text-white space-y-10">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-3xl font-black tracking-tighter uppercase">Security Terminal</h3>
+                   <p className="text-indigo-200/40 text-xs font-medium">Accessing global login and activity streams</p>
+                </div>
+                <div className="flex bg-white/5 p-1.5 rounded-2xl gap-1">
+                   <button className="px-5 py-2 bg-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Login History</button>
+                   <button className="px-5 py-2 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white/40">Audit Trace</button>
+                </div>
+             </div>
+
+             <div className="overflow-x-auto rounded-[32px] border border-white/10 bg-white/5">
+                <table className="w-full text-left">
+                   <thead className="border-b border-white/10 bg-white/5">
+                      <tr>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Actor Node</th>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Network Context</th>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Status</th>
+                         <th className="px-8 py-6 text-[10px] font-black text-indigo-300 uppercase tracking-widest">Temporal Node</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                      {loginLogs.map(log => (
+                        <tr key={log.id} className="hover:bg-white/5 transition-all">
+                           <td className="px-8 py-6">
+                              <p className="text-white font-bold">{log.userName}</p>
+                              <p className="text-white/30 text-[9px]">{log.device}</p>
+                           </td>
+                           <td className="px-8 py-6 text-indigo-400">{log.ipAddress}</td>
+                           <td className="px-8 py-6">
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                              }`}>{log.status}</span>
+                           </td>
+                           <td className="px-8 py-6 text-white/30">{log.timestamp}</td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+
+          <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">IP Restriction</h3>
+                   <p className="text-slate-400 text-xs font-medium">Manage network access boundaries</p>
+                </div>
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-network-wired"></i>
+                </div>
+             </div>
+             
+             <div className="space-y-4">
+                {ipRestrictions.map(rule => (
+                  <div key={rule.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl space-y-3 group hover:border-indigo-200 transition-all">
+                     <div className="flex justify-between items-start">
+                        <div>
+                           <p className="font-mono text-sm font-bold text-slate-900">{rule.ip}</p>
+                           <p className="text-[10px] text-slate-400 font-bold uppercase">{rule.description}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                          rule.type === 'allow' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                        }`}>{rule.type}</span>
+                     </div>
+                     <button onClick={() => handleToggleIP(rule.id)} className="w-full py-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Modify Protocol</button>
+                  </div>
+                ))}
+             </div>
+             <button className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 rounded-3xl font-black text-[10px] uppercase tracking-widest transition-all">+ Add Network Node</button>
+          </div>
+       </div>
+
+       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-10">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Snapshot Engine</h3>
+                   <p className="text-slate-400 text-xs font-medium">System state persistence & recovery</p>
+                </div>
+                <button onClick={handleManualBackup} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Create snapshot</button>
+             </div>
+
+             <div className="space-y-4">
+                {backups.map(bk => (
+                   <div key={bk.id} className="p-6 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-between hover:border-indigo-200 transition-all">
+                      <div className="flex items-center gap-5">
+                         <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm border border-slate-100">
+                            <i className="fas fa-database"></i>
+                         </div>
+                         <div>
+                            <p className="font-mono text-xs font-bold text-slate-900">{bk.name}</p>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">{bk.size} • {bk.createdAt}</p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                            bk.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100 animate-pulse'
+                         }`}>{bk.status}</span>
+                         <button className="p-3 bg-white text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm border border-slate-100">
+                            <i className="fas fa-rotate-left text-xs"></i>
+                         </button>
+                      </div>
+                   </div>
+                ))}
+             </div>
+          </div>
+
+          <div className="bg-rose-50/30 p-12 rounded-[48px] border border-rose-100 shadow-sm space-y-10">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-2xl font-black text-rose-900 tracking-tighter uppercase">Incident Response</h3>
+                   <p className="text-rose-400 text-xs font-medium">Critical security event orchestration</p>
+                </div>
+                <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
+                   <i className="fas fa-triangle-exclamation"></i>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+                {incidents.map(inc => (
+                   <div key={inc.id} className={`p-8 rounded-[40px] border transition-all ${
+                     inc.status === 'investigating' ? 'bg-white border-rose-200 shadow-xl shadow-rose-100/50' : 'bg-slate-50 border-slate-200 opacity-60'
+                   }`}>
+                      <div className="flex justify-between items-start mb-6">
+                         <div className="flex items-center gap-3">
+                            <span className={`w-3 h-3 rounded-full ${inc.severity === 'high' ? 'bg-rose-600 animate-ping' : 'bg-amber-500'}`}></span>
+                            <h4 className="font-black text-slate-900 uppercase tracking-tighter">{inc.type.replace('_', ' ')}</h4>
+                         </div>
+                         <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase border ${
+                            inc.status === 'investigating' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-100 text-slate-400 border-slate-200'
+                         }`}>{inc.status}</span>
+                      </div>
+                      <p className="text-sm text-slate-600 leading-relaxed mb-8">{inc.description}</p>
+                      <div className="flex items-center justify-between">
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{inc.createdAt}</p>
+                         {inc.status === 'investigating' && (
+                           <button onClick={() => handleResolveIncident(inc.id)} className="px-6 py-2.5 bg-rose-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-rose-700 transition-all">Close incident</button>
+                         )}
+                      </div>
+                   </div>
+                ))}
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+
+  const renderAccounts = () => (
+    <div className="space-y-12 animate-fade-up">
+       <div className="bg-white p-12 rounded-[56px] border border-slate-100 shadow-sm space-y-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+             <div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Identity Governance</h3>
+                <p className="text-slate-400 text-sm font-medium">Global authority control and user node lifecycle management</p>
+             </div>
+             <div className="flex gap-4">
+                <button onClick={() => setIsAddOwnerModalOpen(true)} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Enroll Owner Node</button>
+             </div>
+          </div>
+
+          <div className="flex bg-slate-100 p-1.5 rounded-[24px] w-fit">
+             {[UserRole.BUSINESS_OWNER, UserRole.ADMIN_STAFF, UserRole.GUEST].map(role => (
+                <button 
+                  key={role}
+                  onClick={() => setAccountTypeFilter(role)}
+                  className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${accountTypeFilter === role ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                >
+                  {role.replace('_', ' ')}s
+                </button>
+             ))}
+          </div>
+
+          <div className="overflow-hidden bg-white border border-slate-100 rounded-[40px] shadow-sm">
+             <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                   <tr>
+                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Identity Node</th>
+                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Registry Info</th>
+                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lifecycle Status</th>
+                      <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Administrative Actions</th>
+                   </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                   {users.filter(u => u.role === accountTypeFilter).map(u => (
+                      <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                         <td className="px-10 py-6">
+                            <div className="flex items-center gap-5">
+                               <img src={u.avatar} className="w-14 h-14 rounded-2xl object-cover ring-4 ring-white shadow-sm" />
+                               <div>
+                                  <p className="font-black text-slate-900 uppercase tracking-tight">{u.name}</p>
+                                  <p className="text-[10px] font-bold text-indigo-500 lowercase">{u.email}</p>
+                               </div>
+                            </div>
+                         </td>
+                         <td className="px-10 py-6">
+                            <p className="text-xs font-black text-slate-700">Enrolled: {u.createdAt}</p>
+                            {u.businessId && (
+                               <p className="text-[10px] font-black text-slate-400 uppercase mt-1">Entity: {u.businessId}</p>
+                            )}
+                         </td>
+                         <td className="px-10 py-6">
+                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                               suspendedUserIds.has(u.id) ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                            }`}>
+                               {suspendedUserIds.has(u.id) ? 'SUSPENDED' : 'OPERATIONAL'}
+                            </span>
+                         </td>
+                         <td className="px-10 py-6 text-right space-x-2">
+                            <button 
+                               onClick={() => handleResetUserPassword(u.name)}
+                               className="p-3 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-indigo-600 hover:border-indigo-600 transition-all shadow-sm"
+                               title="Reset Key"
+                            >
+                               <i className="fas fa-key text-xs"></i>
+                            </button>
+                            <button 
+                               onClick={() => handleToggleUserStatus(u.id)}
+                               className={`p-3 rounded-xl transition-all shadow-sm ${
+                                  suspendedUserIds.has(u.id) ? 'bg-emerald-600 text-white shadow-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-600 hover:text-white'
+                               }`}
+                               title={suspendedUserIds.has(u.id) ? 'Activate Node' : 'Suspend Node'}
+                            >
+                               <i className={`fas ${suspendedUserIds.has(u.id) ? 'fa-bolt' : 'fa-ban'} text-xs`}></i>
+                            </button>
+                            <button 
+                               onClick={() => handleBanUser(u.id)}
+                               className="p-3 bg-white border border-rose-100 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                               title="Terminate Node"
+                            >
+                               <i className="fas fa-trash-can text-xs"></i>
+                            </button>
+                         </td>
+                      </tr>
+                   ))}
+                </tbody>
+             </table>
+          </div>
+       </div>
+
+       {/* Role Permission Matrix */}
+       <div className="bg-slate-950 p-16 rounded-[64px] shadow-2xl text-white space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-4">
+             <h3 className="text-4xl font-black tracking-tighter uppercase">Authority Matrix Architect</h3>
+             <p className="text-indigo-200/40 text-sm font-medium leading-relaxed">Map ecosystem capabilities to identity classes. Super Admin nodes retain global override authority.</p>
+          </div>
+
+          <div className="overflow-x-auto rounded-[40px] border border-white/10 bg-white/5">
+             <table className="w-full text-left border-collapse">
+                <thead className="bg-black/40 border-b border-white/10">
+                   <tr>
+                      <th className="px-10 py-8 text-[11px] font-black text-indigo-400 uppercase tracking-widest">System Capabilities</th>
+                      {[UserRole.SUPER_ADMIN, UserRole.BUSINESS_OWNER, UserRole.ADMIN_STAFF, UserRole.GUEST].map(role => (
+                         <th key={role} className="px-10 py-8 text-[11px] font-black text-center text-white uppercase tracking-widest border-l border-white/5">
+                            {role.replace('_', ' ')}
+                         </th>
+                      ))}
+                   </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                   {[
+                      { id: 'all_access', label: 'Ecosystem Absolute Access' },
+                      { id: 'manage_business', label: 'Entity Lifecycle Control' },
+                      { id: 'financial_clearance', label: 'Treasury Fund Release' },
+                      { id: 'revenue_audit', label: 'Monetization Analytics' },
+                      { id: 'booking_create', label: 'Marketplace Reservation' },
+                      { id: 'security_override', label: 'Security Firewall Control' },
+                      { id: 'staff_governance', label: 'Operator Desk Management' }
+                   ].map(perm => (
+                      <tr key={perm.id} className="hover:bg-white/5 transition-colors">
+                         <td className="px-10 py-6">
+                            <p className="font-black text-indigo-100 text-sm uppercase tracking-tight">{perm.label}</p>
+                            <p className="text-[10px] text-white/20 font-bold font-mono">{perm.id}</p>
+                         </td>
+                         {[UserRole.SUPER_ADMIN, UserRole.BUSINESS_OWNER, UserRole.ADMIN_STAFF, UserRole.GUEST].map(role => (
+                            <td key={role} className="px-10 py-6 text-center border-l border-white/5">
+                               <button 
+                                 onClick={() => handleTogglePermission(role, perm.id)}
+                                 className={`w-12 h-12 rounded-2xl transition-all flex items-center justify-center mx-auto ${
+                                    roleMatrix[role].includes(perm.id) 
+                                       ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-900/50 scale-110' 
+                                       : 'bg-white/5 text-white/10 hover:bg-white/10 hover:text-white/40'
+                                 }`}
+                               >
+                                  <i className={`fas ${roleMatrix[role].includes(perm.id) ? 'fa-shield-check' : 'fa-shield-halved'}`}></i>
+                               </button>
+                            </td>
+                         ))}
+                      </tr>
+                   ))}
+                </tbody>
+             </table>
+          </div>
+          <div className="flex justify-center">
+             <button className="px-12 py-5 bg-indigo-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">Synchronize Matrix</button>
+          </div>
+       </div>
+
+       {/* Add Owner Modal */}
+       {isAddOwnerModalOpen && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-6">
+             <div className="bg-white w-full max-w-xl rounded-[48px] p-12 space-y-10 shadow-2xl animate-in zoom-in-95">
+                <div className="text-center">
+                   <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-8 text-2xl">
+                      <i className="fas fa-user-plus"></i>
+                   </div>
+                   <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-4">Enroll Owner Node</h3>
+                   <p className="text-slate-400 text-sm font-medium">Bypass registration protocol to inject a new Owner node into the ecosystem.</p>
+                </div>
+                
+                <form onSubmit={handleCreateOwner} className="space-y-6">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Legal Identity</label>
+                      <input name="name" required type="text" placeholder="John Proprietor" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50" />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Node (Email)</label>
+                      <input name="email" required type="email" placeholder="john@owner.com" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50" />
+                   </div>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Initialization Key (Password)</label>
+                      <input name="password" required type="password" placeholder="••••••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50" />
+                   </div>
+                   <div className="grid grid-cols-2 gap-4 pt-6">
+                      <button type="button" onClick={() => setIsAddOwnerModalOpen(false)} className="py-5 bg-slate-100 text-slate-500 rounded-3xl font-black uppercase text-xs tracking-widest">Abort</button>
+                      <button type="submit" className="py-5 bg-slate-950 text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-slate-200 hover:bg-indigo-600 transition-all">Authorize Node</button>
+                   </div>
+                </form>
+             </div>
+          </div>
+       )}
+    </div>
+  );
+
+  const renderEngine = () => (
+    <div className="space-y-12 animate-fade-up">
+       {/* Topology Control */}
+       <div className="bg-white p-12 rounded-[56px] border border-slate-100 shadow-sm space-y-10">
+          <div className="flex items-center justify-between">
+             <div>
+                <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Business Topology Architect</h3>
+                <p className="text-slate-400 text-sm font-medium">Define and manage top-level property classifications</p>
+             </div>
+             <button onClick={() => setIsAddCatModalOpen(true)} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Deploy New Topology</button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             {categories.map(cat => (
+                <div key={cat} className="p-8 bg-slate-50 border border-slate-100 rounded-[40px] hover:border-indigo-200 transition-all group">
+                   <div className="flex justify-between items-start mb-8">
+                      <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-slate-100">
+                         <i className="fas fa-microchip text-xl"></i>
+                      </div>
+                      <button onClick={() => handleDeleteCategory(cat)} className="text-slate-300 hover:text-rose-500 transition-colors">
+                         <i className="fas fa-trash-can text-sm"></i>
+                      </button>
+                   </div>
+                   <h4 className="text-xl font-black text-slate-900 mb-6 uppercase tracking-tight">{cat}</h4>
+                   
+                   <div className="space-y-3">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Module Stack</p>
+                      <div className="grid grid-cols-2 gap-2">
+                         {[SystemModule.BOOKING, SystemModule.MONTHLY_RENTAL, SystemModule.SALES_PURCHASE, SystemModule.REVIEWS].map(mod => (
+                            <button 
+                               key={mod}
+                               onClick={() => toggleModuleForCategory(cat, mod)}
+                               className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                  (moduleConfigs[cat] || []).includes(mod) 
+                                     ? 'bg-indigo-600 text-white border-indigo-600' 
+                                     : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-100'
+                               }`}
+                            >
+                               {mod}
+                            </button>
+                         ))}
+                      </div>
+                   </div>
+                </div>
+             ))}
+          </div>
+       </div>
+
+       {/* Plan Mapping Matrix */}
+       <div className="bg-slate-950 p-16 rounded-[64px] shadow-2xl text-white space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-4">
+             <h3 className="text-4xl font-black tracking-tighter uppercase">Subscription Feature Mapping</h3>
+             <p className="text-indigo-200/40 text-sm font-medium leading-relaxed">Bind high-level system modules to economic access tiers. Premium nodes override all basic constraints.</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+             {[SubscriptionPlan.BASIC, SubscriptionPlan.PRO, SubscriptionPlan.PREMIUM].map(plan => (
+                <div key={plan} className="bg-white/5 border border-white/10 rounded-[48px] p-10 space-y-8 hover:bg-white/10 transition-all">
+                   <div className="flex items-center justify-between mb-4">
+                      <div>
+                         <h4 className="text-2xl font-black uppercase tracking-tighter">{plan} TIER</h4>
+                         <p className="text-indigo-400 text-[10px] font-bold uppercase tracking-widest">Protocol Mapping</p>
+                      </div>
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${plan === SubscriptionPlan.PREMIUM ? 'bg-indigo-600' : 'bg-white/10'}`}>
+                         <i className="fas fa-gem"></i>
+                      </div>
+                   </div>
+
+                   <div className="space-y-2">
+                      {Object.values(SystemModule).map(mod => (
+                         <button 
+                            key={mod}
+                            onClick={() => toggleModuleForPlan(plan, mod)}
+                            className={`w-full flex items-center justify-between p-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                               (planModuleMapping[plan] || []).includes(mod)
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-black/20 text-white/20 hover:text-white/40'
+                            }`}
+                         >
+                            <span>{mod}</span>
+                            <i className={`fas ${ (planModuleMapping[plan] || []).includes(mod) ? 'fa-check-circle' : 'fa-circle-dot opacity-20'}`}></i>
+                         </button>
+                      ))}
+                   </div>
+                </div>
+             ))}
+          </div>
+
+          <div className="pt-10 flex justify-center">
+             <button className="px-12 py-5 bg-indigo-600 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">Synchronize Flex Matrix</button>
+          </div>
+       </div>
+
+       {/* Category Modal */}
+       {isAddCatModalOpen && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-6">
+             <div className="bg-white w-full max-w-md rounded-[48px] p-12 space-y-10 shadow-2xl animate-in zoom-in-95">
+                <div className="text-center">
+                   <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-8 text-2xl">
+                      <i className="fas fa-sitemap"></i>
+                   </div>
+                   <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase mb-4">New Topology</h3>
+                   <p className="text-slate-400 text-sm font-medium">Inject a new business classification into the ecosystem core</p>
+                </div>
+                
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Classification Name</label>
+                   <input 
+                      id="new-cat-name"
+                      type="text" 
+                      placeholder="e.g. Office Space, Warehouse" 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50" 
+                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-6">
+                   <button onClick={() => setIsAddCatModalOpen(false)} className="py-5 bg-slate-100 text-slate-500 rounded-3xl font-black uppercase text-xs tracking-widest">Abort</button>
+                   <button 
+                      onClick={() => {
+                         const val = (document.getElementById('new-cat-name') as HTMLInputElement).value;
+                         if (val) handleAddCategory(val);
+                      }}
+                      className="py-5 bg-slate-950 text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-slate-200"
+                   >
+                      Authorize
+                   </button>
+                </div>
+             </div>
+          </div>
+       )}
+    </div>
+  );
 
   const renderSettings = () => (
     <div className="space-y-12 animate-fade-up">
@@ -286,7 +932,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
              </div>
           </div>
 
-          {/* Notification Engine */}
           <div className="lg:col-span-2 bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div className="flex items-center justify-between">
                 <div>
@@ -319,7 +964,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
        </div>
 
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Email Template Architect */}
           <div className="bg-slate-950 p-12 rounded-[48px] shadow-2xl text-white space-y-10">
              <div className="flex items-center justify-between">
                 <div>
@@ -349,7 +993,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
              </div>
           </div>
 
-          {/* Payment Gateway Matrix */}
           <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-10">
              <div className="flex items-center justify-between">
                 <div>
@@ -403,7 +1046,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const renderTrust = () => (
     <div className="space-y-12 animate-fade-up">
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Review Moderation */}
           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div className="flex items-center justify-between">
                 <div>
@@ -436,7 +1078,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
              </div>
           </div>
 
-          {/* Complaint Handling */}
           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div className="flex items-center justify-between">
                 <div>
@@ -471,7 +1112,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
        </div>
 
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Dispute Resolution Ledger */}
           <div className="lg:col-span-2 bg-slate-950 p-12 rounded-[48px] shadow-2xl text-white space-y-10">
              <div>
                 <h3 className="text-3xl font-black tracking-tighter uppercase">Dispute Resolution Ledger</h3>
@@ -512,7 +1152,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
              </div>
           </div>
 
-          {/* Business Penalty HUD */}
           <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div className="flex items-center justify-between">
                 <div>
@@ -547,7 +1186,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const renderQuality = () => (
     <div className="space-y-12 animate-fade-up">
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          {/* Moderation Module */}
           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div className="flex items-center justify-between">
                 <div>
@@ -586,7 +1224,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
              </div>
           </div>
 
-          {/* Featured Approvals */}
           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div className="flex items-center justify-between">
                 <div>
@@ -622,7 +1259,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
        </div>
 
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          {/* Banner Homepage Architect */}
           <div className="lg:col-span-2 bg-slate-950 p-12 rounded-[48px] shadow-2xl text-white space-y-10">
              <div className="flex items-center justify-between">
                 <div>
@@ -652,7 +1288,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
              </div>
           </div>
 
-          {/* SEO Metadata Control */}
           <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
              <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">SEO Metadata Hub</h3>
@@ -943,17 +1578,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     <div className="space-y-10 animate-fade-up">
        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-             <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Tenant Governance & Subscription</h2>
-             <p className="text-slate-400 text-xs font-medium">Control ecosystem nodes, billing cycles, and access tiers</p>
+             <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Business Hub Governance</h2>
+             <p className="text-slate-400 text-xs font-medium">Control ecosystem nodes, lifecycle status, and topology</p>
           </div>
-          <button className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100">Register Manual Entity</button>
+          <button onClick={() => setIsAddBizModalOpen(true)} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Enroll Manual Entity</button>
        </div>
 
        <div className="bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden">
           <table className="w-full text-left">
              <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
-                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Entity</th>
+                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Business Entity / Topology</th>
                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Subscription Tier</th>
                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Temporal Cycle</th>
                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status Node</th>
@@ -964,9 +1599,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 {businesses.map(b => (
                   <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
                      <td className="px-8 py-6">
-                        <div>
-                           <p className="font-black text-slate-900">{b.name}</p>
-                           <p className="text-[10px] font-bold text-slate-400 uppercase">{b.category}</p>
+                        <div className="flex items-center gap-4">
+                           <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-indigo-600 border border-slate-100">
+                              <i className="fas fa-building"></i>
+                           </div>
+                           <div>
+                              <p className="font-black text-slate-900">{b.name}</p>
+                              <select 
+                                value={b.category}
+                                onChange={(e) => handleAssignCategory(b.id, e.target.value)}
+                                className="text-[9px] font-bold text-slate-400 uppercase bg-transparent outline-none cursor-pointer hover:text-indigo-600 transition-colors"
+                              >
+                                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                              </select>
+                           </div>
                         </div>
                      </td>
                      <td className="px-8 py-6">
@@ -990,25 +1636,26 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                           b.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                           b.status === 'suspended' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                          'bg-amber-50 text-amber-600 border-amber-100'
+                          b.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                          'bg-slate-200 text-slate-500 border-slate-300'
                         }`}>
                            {b.status}
                         </span>
                      </td>
                      <td className="px-8 py-6 text-right space-x-2">
                         <button 
+                           onClick={() => setSelectedBizDetail(b)}
+                           className="p-3 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-indigo-600 hover:border-indigo-600 transition-all shadow-sm"
+                           title="Inspect Detail"
+                        >
+                           <i className="fas fa-magnifying-glass-chart text-xs"></i>
+                        </button>
+                        <button 
                            onClick={() => { setActiveBizForSub(b); setIsSubModalOpen(true); }}
                            className="p-3 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-indigo-600 hover:border-indigo-600 transition-all shadow-sm"
                            title="Control Subscription"
                         >
                            <i className="fas fa-gem text-xs"></i>
-                        </button>
-                        <button 
-                           onClick={() => handleGenerateInvoice(b)}
-                           className="p-3 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-emerald-600 hover:border-emerald-600 transition-all shadow-sm"
-                           title="Generate Invoice"
-                        >
-                           <i className="fas fa-file-invoice-dollar text-xs"></i>
                         </button>
                         <button 
                            onClick={() => handleManualSuspend(b.id)}
@@ -1019,12 +1666,210 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                         >
                            <i className={`fas ${b.status === 'suspended' ? 'fa-bolt' : 'fa-ban'} text-xs`}></i>
                         </button>
+                        <button 
+                           onClick={() => handleTerminateBusiness(b.id)}
+                           className="p-3 bg-white border border-rose-100 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all shadow-sm"
+                           title="Terminate Node"
+                        >
+                           <i className="fas fa-trash-can text-xs"></i>
+                        </button>
                      </td>
                   </tr>
                 ))}
              </tbody>
           </table>
        </div>
+
+       {/* Detailed Business View Modal */}
+       {selectedBizDetail && (
+         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-6">
+            <div className="bg-white w-full max-w-6xl h-[85vh] rounded-[56px] overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95">
+               <div className="p-12 border-b border-slate-50 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-8">
+                     <img src={selectedBizDetail.images[0]} className="w-24 h-24 rounded-[32px] object-cover shadow-xl" />
+                     <div>
+                        <h3 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-2">{selectedBizDetail.name}</h3>
+                        <div className="flex gap-4 items-center">
+                           <span className="px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-full tracking-widest">{selectedBizDetail.category} HUB</span>
+                           <span className="px-4 py-1.5 bg-slate-50 text-slate-400 text-[10px] font-black uppercase rounded-full border border-slate-100">NODE ID: {selectedBizDetail.id}</span>
+                        </div>
+                     </div>
+                  </div>
+                  <button onClick={() => setSelectedBizDetail(null)} className="w-14 h-14 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-2xl flex items-center justify-center transition-all">
+                     <i className="fas fa-times text-xl"></i>
+                  </button>
+               </div>
+               
+               <div className="flex-1 overflow-y-auto p-12 scrollbar-hide">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                     <div className="lg:col-span-2 space-y-10">
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-3 gap-6">
+                           {[
+                             { label: 'GTV Telemetry', value: 'Rp 45.2M', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: 'fa-chart-line' },
+                             { label: 'Asset Capacity', value: '12 Units', color: 'text-indigo-600', bg: 'bg-indigo-50', icon: 'fa-door-open' },
+                             { label: 'Registry Age', value: '354 Days', color: 'text-amber-600', bg: 'bg-amber-50', icon: 'fa-calendar' },
+                           ].map((s, i) => (
+                             <div key={i} className="p-8 rounded-[40px] border border-slate-50 bg-white shadow-sm">
+                                <div className={`w-12 h-12 ${s.bg} ${s.color} rounded-2xl flex items-center justify-center mb-6`}>
+                                   <i className={`fas ${s.icon}`}></i>
+                                </div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{s.label}</p>
+                                <p className="text-2xl font-black text-slate-900">{s.value}</p>
+                             </div>
+                           ))}
+                        </div>
+
+                        {/* Activity Feed */}
+                        <div className="space-y-6">
+                           <h4 className="text-xl font-black text-slate-900 tracking-tight uppercase">Operational Activity Feed</h4>
+                           <div className="bg-slate-50 rounded-[40px] border border-slate-100 p-8 space-y-4">
+                              {bookings.filter(bk => bk.businessId === selectedBizDetail.id).map(bk => (
+                                 <div key={bk.id} className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-100">
+                                    <div className="flex items-center gap-5">
+                                       <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black text-xs">BK</div>
+                                       <div>
+                                          <p className="text-sm font-black text-slate-900 uppercase">Reservation Created: {bk.id}</p>
+                                          <p className="text-[10px] text-slate-400 font-bold uppercase">{bk.checkIn} → {bk.checkOut}</p>
+                                       </div>
+                                    </div>
+                                    <p className="font-black text-slate-900">Rp {bk.totalPrice.toLocaleString()}</p>
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+
+                        {/* Detailed Audit Logs */}
+                        <div className="space-y-6">
+                           <h4 className="text-xl font-black text-slate-900 tracking-tight uppercase">Forensic Audit Log</h4>
+                           <div className="overflow-hidden bg-white border border-slate-100 rounded-[40px] shadow-sm">
+                              <table className="w-full text-left">
+                                 <thead className="bg-slate-50 border-b border-slate-100">
+                                    <tr>
+                                       <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase">Protocol Action</th>
+                                       <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase">Actor Node</th>
+                                       <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase">Temporal Node</th>
+                                    </tr>
+                                 </thead>
+                                 <tbody className="divide-y divide-slate-50">
+                                    {auditLogs.filter(log => log.target.includes(selectedBizDetail.name) || log.actorId === selectedBizDetail.ownerId).map(log => (
+                                       <tr key={log.id}>
+                                          <td className="px-8 py-5">
+                                             <p className="text-sm font-bold text-slate-700">{log.action}</p>
+                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{log.target}</p>
+                                          </td>
+                                          <td className="px-8 py-5 text-[11px] font-black text-indigo-600 uppercase">{log.actorName}</td>
+                                          <td className="px-8 py-5 text-[11px] font-bold text-slate-400">{log.timestamp}</td>
+                                       </tr>
+                                    ))}
+                                 </tbody>
+                              </table>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="space-y-10">
+                        {/* Owner Profile */}
+                        <div className="bg-slate-950 p-10 rounded-[48px] shadow-xl text-white space-y-8">
+                           <div>
+                              <h4 className="text-lg font-black tracking-tight uppercase mb-6">Owner Context</h4>
+                              {users.filter(u => u.id === selectedBizDetail.ownerId).map(owner => (
+                                 <div key={owner.id} className="flex items-center gap-5">
+                                    <img src={owner.avatar} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/10" />
+                                    <div>
+                                       <p className="font-black text-white">{owner.name}</p>
+                                       <p className="text-[10px] text-white/40 font-bold">{owner.email}</p>
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                           <div className="pt-8 border-t border-white/5 space-y-4">
+                              <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                 <span className="text-white/40">Status:</span>
+                                 <span className="text-emerald-400">ID VERIFIED</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                 <span className="text-white/40">Loyalty:</span>
+                                 <span className="text-indigo-400">PARTNER ELITE</span>
+                              </div>
+                           </div>
+                        </div>
+
+                        {/* Subscription Node */}
+                        <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm space-y-8">
+                           <h4 className="text-lg font-black text-slate-900 tracking-tight uppercase">Subscription Node</h4>
+                           <div className="p-8 bg-indigo-50 rounded-3xl border border-indigo-100 text-center">
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Active Protocol</p>
+                              <p className="text-3xl font-black text-indigo-700">{selectedBizDetail.subscription}</p>
+                           </div>
+                           <div className="space-y-4">
+                              <div className="flex justify-between text-[11px] font-bold">
+                                 <span className="text-slate-400 uppercase">Expiry Node:</span>
+                                 <span className="text-slate-700">{selectedBizDetail.subscriptionExpiry}</span>
+                              </div>
+                              <div className="flex justify-between text-[11px] font-bold">
+                                 <span className="text-slate-400 uppercase">Auto-Renew:</span>
+                                 <span className="text-emerald-500 uppercase">Enabled</span>
+                              </div>
+                           </div>
+                           <button onClick={() => { setActiveBizForSub(selectedBizDetail); setIsSubModalOpen(true); }} className="w-full py-4 bg-slate-950 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg">Override Protocol</button>
+                        </div>
+
+                        {/* Safety & Compliance */}
+                        <div className="bg-rose-50 p-10 rounded-[48px] border border-rose-100 space-y-6">
+                           <h4 className="text-lg font-black text-rose-900 tracking-tight uppercase">Security Health</h4>
+                           <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-rose-600 shadow-sm">
+                                 <i className="fas fa-shield-virus"></i>
+                              </div>
+                              <div>
+                                 <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">Incident History</p>
+                                 <p className="font-black text-rose-900">{selectedBizDetail.penaltyCount || 0} Penalties Applied</p>
+                              </div>
+                           </div>
+                           <button onClick={() => handleApplyPenalty(selectedBizDetail.id)} className="w-full py-4 border-2 border-rose-200 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all">Flag Violation</button>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+       )}
+
+       {/* Manual Enrollment Modal */}
+       {isAddBizModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-6">
+             <div className="bg-white w-full max-w-2xl rounded-[48px] p-12 space-y-10 shadow-2xl animate-in zoom-in-95">
+                <div>
+                   <h3 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Manual Node Enrollment</h3>
+                   <p className="text-slate-400 text-sm font-medium">Bypass user self-registration and enroll a business node</p>
+                </div>
+                
+                <form onSubmit={handleAddBusinessManual} className="space-y-8">
+                   <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Entity Name</label>
+                         <input name="name" required type="text" placeholder="Majestic Suites" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50" />
+                      </div>
+                      <div className="space-y-4">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Topology Class</label>
+                         <select name="category" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50">
+                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                         </select>
+                      </div>
+                   </div>
+                   <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Global Address Node</label>
+                      <input name="address" required type="text" placeholder="Jl. Protocol No. 8, Banda Aceh" className="w-full bg-slate-50 border border-slate-200 rounded-3xl px-8 py-5 font-black text-slate-900 outline-none focus:ring-4 ring-indigo-50" />
+                   </div>
+                   <div className="grid grid-cols-2 gap-4 pt-6">
+                      <button type="button" onClick={() => setIsAddBizModalOpen(false)} className="py-5 bg-slate-100 text-slate-500 rounded-3xl font-black uppercase text-xs tracking-widest">Abort Registry</button>
+                      <button type="submit" className="py-5 bg-slate-950 text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl shadow-slate-200 hover:bg-indigo-600 transition-all">Authorize Node</button>
+                   </div>
+                </form>
+             </div>
+          </div>
+       )}
 
        {/* Subscription Management Modal */}
        {isSubModalOpen && activeBizForSub && (
@@ -1209,13 +2054,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <div className="flex bg-slate-100/80 backdrop-blur p-2 rounded-[28px] border border-slate-200/40 gap-1 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: t.ecosystem, icon: 'fa-brain' },
+              { id: 'tenants', label: 'Business Hub', icon: 'fa-building-shield' },
               { id: 'oversight', label: 'Oversight', icon: 'fa-crosshairs' },
-              { id: 'quality', label: 'Quality', icon: 'fa-certificate' },
+              { id: 'quality', label: 'Quality Control', icon: 'fa-certificate' },
               { id: 'trust', label: 'User Trust', icon: 'fa-handshake-angle' },
+              { id: 'security', label: 'Security Hub', icon: 'fa-shield-halved' },
               { id: 'monetization', label: 'Monetization', icon: 'fa-coins' },
               { id: 'finance', label: t.treasury, icon: 'fa-receipt' },
               { id: 'engine', label: 'Flex Engine', icon: 'fa-microchip' },
-              { id: 'tenants', label: 'Tenants', icon: 'fa-building-shield' },
               { id: 'accounts', label: 'Accounts', icon: 'fa-users-gear' },
               { id: 'settings', label: 'System Config', icon: 'fa-gears' },
               { id: 'profile', label: 'My Identity', icon: 'fa-user-lock' }
@@ -1240,22 +2086,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         {activeTab === 'oversight' && renderOversight()}
         {activeTab === 'quality' && renderQuality()}
         {activeTab === 'trust' && renderTrust()}
+        {activeTab === 'security' && renderSecurity()}
         {activeTab === 'monetization' && renderMonetization()}
         {activeTab === 'finance' && renderFinance()}
         {activeTab === 'tenants' && renderTenants()}
         {activeTab === 'settings' && renderSettings()}
-        {activeTab === 'engine' && (
-           <div className="py-40 text-center animate-fade-up">
-              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase">Topology Engine</h3>
-              <p className="text-slate-500 font-medium">Modular category and system permission architect.</p>
-           </div>
-        )}
-        {activeTab === 'accounts' && (
-           <div className="py-40 text-center animate-fade-up">
-              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase">Account Governance</h3>
-              <p className="text-slate-500 font-medium">RBAC matrix and identity termination protocols.</p>
-           </div>
-        )}
+        {activeTab === 'engine' && renderEngine()}
+        {activeTab === 'accounts' && renderAccounts()}
         {activeTab === 'profile' && renderProfile()}
       </div>
     </div>

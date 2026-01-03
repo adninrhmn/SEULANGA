@@ -22,10 +22,12 @@ export enum SystemModule {
   MARKETING = 'Marketing',
   INVENTORY = 'Inventory',
   FINANCE = 'Finance',
-  TEAM = 'Team'
+  TEAM = 'Team',
+  MONTHLY_RENTAL = 'Monthly Rental',
+  SALES_PURCHASE = 'Sales & Purchase'
 }
 
-export type CategoryModuleConfig = Record<BusinessCategory, SystemModule[]>;
+export type CategoryModuleConfig = Record<string, SystemModule[]>;
 
 export enum SubscriptionPlan {
   BASIC = 'Basic',
@@ -118,6 +120,41 @@ export interface PaymentGateway {
   environment: 'sandbox' | 'production';
 }
 
+export interface LoginLog {
+  id: string;
+  userId: string;
+  userName: string;
+  ipAddress: string;
+  device: string;
+  status: 'success' | 'failed';
+  timestamp: string;
+}
+
+export interface IPRestriction {
+  id: string;
+  ip: string;
+  type: 'allow' | 'block';
+  description: string;
+  createdAt: string;
+}
+
+export interface SystemBackup {
+  id: string;
+  name: string;
+  size: string;
+  status: 'completed' | 'failed' | 'in_progress';
+  createdAt: string;
+}
+
+export interface SecurityIncident {
+  id: string;
+  type: 'brute_force' | 'unauthorized_access' | 'data_export' | 'anomaly';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'investigating' | 'resolved';
+  description: string;
+  createdAt: string;
+}
+
 export interface Inquiry {
   id: string;
   guestId: string;
@@ -167,7 +204,7 @@ export type BusinessStatus = 'active' | 'pending' | 'suspended' | 'rejected' | '
 export interface Business {
   id: string;
   name: string;
-  category: BusinessCategory;
+  category: string;
   ownerId: string;
   description: string;
   address: string;
@@ -228,14 +265,25 @@ export interface Booking {
   verifiedPayment?: boolean;
 }
 
-export interface Transaction {
+export interface AuditLog {
   id: string;
-  type: 'subscription' | 'commission' | 'ad_fee' | 'service_fee' | 'payout' | 'booking_payment';
-  amount: number;
-  status: 'pending' | 'completed' | 'failed';
-  businessId?: string;
-  guestId?: string;
-  description: string;
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  action: string;
+  target: string;
+  type: 'management' | 'security' | 'system' | 'financial';
+  timestamp: string;
+}
+
+export interface Review {
+  id: string;
+  businessId: string;
+  guestId: string;
+  guestName: string;
+  rating: number;
+  comment: string;
+  status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
 
@@ -250,26 +298,13 @@ export interface Promotion {
   isActive: boolean;
 }
 
-export interface AuditLog {
+export interface Transaction {
   id: string;
-  actorId: string;
-  actorName: string;
-  actorRole: UserRole;
-  action: string;
-  target: string;
-  type: 'security' | 'financial' | 'management' | 'system' | 'operational';
-  timestamp: string;
-}
-
-export interface Review {
-  id: string;
+  type: 'subscription' | 'commission' | 'ad_promotion' | 'service_fee';
+  amount: number;
+  status: 'pending' | 'completed' | 'failed' | 'refunded';
   businessId: string;
-  guestId: string;
-  guestName: string;
-  rating: number;
-  comment: string;
-  status: 'pending' | 'approved' | 'rejected';
-  flags?: string[];
+  guestId?: string;
+  description: string;
   createdAt: string;
-  response?: string;
 }
