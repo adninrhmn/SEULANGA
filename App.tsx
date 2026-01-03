@@ -17,12 +17,21 @@ const App: React.FC = () => {
   const [adminSubView, setAdminSubView] = useState<string>('overview');
   const [selectedProperty, setSelectedProperty] = useState<Business | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [language, setLanguage] = useState<'id' | 'en'>('id');
 
   useEffect(() => {
+    const savedLang = localStorage.getItem('seulanga_lang') as 'id' | 'en';
+    if (savedLang) setLanguage(savedLang);
+    
     setTimeout(() => {
       setIsLoading(false);
     }, 1200);
   }, []);
+
+  const handleLanguageChange = (lang: 'id' | 'en') => {
+    setLanguage(lang);
+    localStorage.setItem('seulanga_lang', lang);
+  };
 
   const handleLogin = (role: UserRole) => {
     const user = MOCK_USERS.find(u => u.role === role);
@@ -72,7 +81,6 @@ const App: React.FC = () => {
         <p className="mt-8 text-white font-black text-3xl tracking-tighter animate-pulse">
           SEULANGA<span className="text-indigo-500">.</span>
         </p>
-        <p className="mt-2 text-slate-500 text-xs font-bold uppercase tracking-[0.4em]">Initializing Ecosystem</p>
       </div>
     );
   }
@@ -84,7 +92,7 @@ const App: React.FC = () => {
       case 'owner-dash':
         return <OwnerDashboard />;
       case 'super-admin':
-        return <SuperAdminDashboard activeTab={adminSubView as any} onNavigate={handleNavigate} />;
+        return <SuperAdminDashboard activeTab={adminSubView as any} onNavigate={handleNavigate} language={language} />;
       case 'staff-dash':
         return <StaffDashboard />;
       case 'guest-dash':
@@ -103,37 +111,12 @@ const App: React.FC = () => {
               <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">Enter the Portal<span className="text-indigo-600">.</span></h2>
               <p className="text-slate-500 font-medium">Select your professional identity to begin.</p>
             </div>
-            
             <div className="grid gap-4">
               {[
-                { 
-                  role: UserRole.BUSINESS_OWNER, 
-                  label: 'Enterprise Partner', 
-                  desc: 'Complete property control & scaling tools', 
-                  icon: 'fa-hotel', 
-                  color: 'bg-indigo-600' 
-                },
-                { 
-                  role: UserRole.ADMIN_STAFF, 
-                  label: 'Operations Team', 
-                  desc: 'Front-desk tools for staff & receptionists', 
-                  icon: 'fa-clipboard-user', 
-                  color: 'bg-violet-600' 
-                },
-                { 
-                  role: UserRole.GUEST, 
-                  label: 'Premium Guest', 
-                  desc: 'Luxury stays & verified property rentals', 
-                  icon: 'fa-star', 
-                  color: 'bg-emerald-600' 
-                },
-                { 
-                  role: UserRole.SUPER_ADMIN, 
-                  label: 'System Governor', 
-                  desc: 'Platform-wide oversight & policy control', 
-                  icon: 'fa-shield-halved', 
-                  color: 'bg-slate-950' 
-                }
+                { role: UserRole.BUSINESS_OWNER, label: 'Enterprise Partner', desc: 'Complete property control & scaling tools', icon: 'fa-hotel', color: 'bg-indigo-600' },
+                { role: UserRole.ADMIN_STAFF, label: 'Operations Team', desc: 'Front-desk tools for staff & receptionists', icon: 'fa-clipboard-user', color: 'bg-violet-600' },
+                { role: UserRole.GUEST, label: 'Premium Guest', desc: 'Luxury stays & verified property rentals', icon: 'fa-star', color: 'bg-emerald-600' },
+                { role: UserRole.SUPER_ADMIN, label: 'System Governor', desc: 'Platform-wide oversight & policy control', icon: 'fa-shield-halved', color: 'bg-slate-950' }
               ].map((persona) => (
                 <button 
                   key={persona.role}
@@ -146,9 +129,6 @@ const App: React.FC = () => {
                   <div>
                     <h4 className="font-black text-xl text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors">{persona.label}</h4>
                     <p className="text-slate-500 text-sm font-medium">{persona.desc}</p>
-                  </div>
-                  <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                    <i className="fas fa-arrow-right text-indigo-600"></i>
                   </div>
                 </button>
               ))}
@@ -167,6 +147,8 @@ const App: React.FC = () => {
       onNavigate={handleNavigate}
       currentView={currentView}
       currentSubView={adminSubView}
+      language={language}
+      onLanguageChange={handleLanguageChange}
     >
       {renderView()}
     </Layout>

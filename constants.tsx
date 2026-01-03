@@ -3,6 +3,55 @@ import { UserRole, BusinessCategory, SubscriptionPlan, User, Business, Unit, Boo
 
 export const APP_NAME = "SEULANGA";
 
+export const TRANSLATIONS = {
+  id: {
+    dashboard: "Dasbor",
+    marketplace: "Pasar Properti",
+    governance: "Pusat Tata Kelola",
+    business_hub: "Pusat Bisnis",
+    ops_desk: "Meja Operasional",
+    my_bookings: "Pesanan Saya",
+    ecosystem: "Ekosistem",
+    analytics: "Analitik",
+    tenants: "Penyewa",
+    treasury: "Perbendaharaan",
+    settings: "Pengaturan",
+    search_placeholder: "Cari kluster, node, atau entitas mitra...",
+    get_started: "Mulai Sekarang",
+    log_in: "Masuk",
+    terminate: "Keluar Sesi",
+    identity_verified: "Identitas Terverifikasi",
+    absolute_authority: "Otoritas Mutlak",
+    active_tenants: "Tenant Aktif",
+    revenue_net: "Pendapatan Bersih",
+    platform_gtv: "Total Nilai Transaksi",
+    security_health: "Kesehatan Keamanan"
+  },
+  en: {
+    dashboard: "Dashboard",
+    marketplace: "Marketplace",
+    governance: "Governance Hub",
+    business_hub: "Business Hub",
+    ops_desk: "Ops Desk",
+    my_bookings: "My Bookings",
+    ecosystem: "Ecosystem",
+    analytics: "Analytics",
+    tenants: "Tenants",
+    treasury: "Treasury",
+    settings: "Settings",
+    search_placeholder: "Search cluster, nodes, or partner entities...",
+    get_started: "Get Started",
+    log_in: "Log In",
+    terminate: "Terminate",
+    identity_verified: "Identity Verified",
+    absolute_authority: "Absolute Authority",
+    active_tenants: "Active Tenants",
+    revenue_net: "Revenue Net",
+    platform_gtv: "Platform GTV",
+    security_health: "Security Health"
+  }
+};
+
 export const MOCK_USERS: User[] = [
   { id: 'u1', name: 'Zian Ali', email: 'admin@seulanga.com', role: UserRole.SUPER_ADMIN, avatar: 'https://i.pravatar.cc/150?u=u1', createdAt: '2024-01-01' },
   { id: 'u2', name: 'John Doe', email: 'john@hotel.com', role: UserRole.BUSINESS_OWNER, businessId: 'b1', avatar: 'https://i.pravatar.cc/150?u=u2', createdAt: '2024-01-05' },

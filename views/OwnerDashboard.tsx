@@ -76,7 +76,11 @@ export const OwnerDashboard: React.FC = () => {
       amenities: (formData.get('amenities') as string).split(',').map(s => s.trim()),
       images: editingUnit?.images || ['https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=2071'],
       description: formData.get('description') as string,
-      blockedDates: blockedDates
+      blockedDates: blockedDates,
+      policies: {
+        cancellation: formData.get('policyCancellation') as string,
+        checkIn: formData.get('policyCheckIn') as string,
+      }
     };
 
     if (editingUnit) {
@@ -653,6 +657,26 @@ export const OwnerDashboard: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technical Description</label>
                   <textarea name="description" defaultValue={editingUnit?.description} rows={3} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none resize-none" placeholder="Describe the layout and key features of this specific unit..." />
+                </div>
+
+                {/* Policy Section */}
+                <div className="pt-6 border-t border-slate-50 space-y-6">
+                  <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Asset Governance & Protocols</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cancellation Strategy</label>
+                      <select name="policyCancellation" defaultValue={editingUnit?.policies?.cancellation || 'Flexible'} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none">
+                        <option value="Flexible">Flexible (Full refund 24h prior)</option>
+                        <option value="Moderate">Moderate (Full refund 5 days prior)</option>
+                        <option value="Strict">Strict (50% refund 7 days prior)</option>
+                        <option value="Non-refundable">Non-refundable (No refunds allowed)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Check-in Requirements</label>
+                      <input name="policyCheckIn" defaultValue={editingUnit?.policies?.checkIn} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 font-bold text-slate-900 focus:outline-none" placeholder="Ex: Physical ID Required, Deposit Rp 500k" />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">

@@ -93,6 +93,11 @@ export interface Unit {
   images: string[];
   description?: string;
   blockedDates?: string[]; // ISO format YYYY-MM-DD
+  policies?: {
+    cancellation: string;
+    checkIn: string;
+    other?: string;
+  };
 }
 
 export interface Transaction {
